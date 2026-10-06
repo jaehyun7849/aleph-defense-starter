@@ -81,5 +81,33 @@ async function runProtectionChecks(config) {
     response => response.ok
       && (response.headers.get('x-content-type-options') === 'nosniff'
         || Boolean(response.headers.get('content-security-policy'))));
+  if (config.step >= 4) {
+    attempts.push(await checkAnonymousDatabase(config));
+  }
   return attempts;
+}
+
+async function checkAnonymousDatabase(config) {
+  const expected = '공개용 키만 사용한 DB 직접 읽기는 권한 오류로 거부';
+  try {
+    const issuer = new URL(config.identityProvider.issuer);
+    if (issuer.protocol !== 'https:' || issuer.username || issuer.password
+        || issuer.port || issuer.search || issuer.hash
+        || issuer.pathname !== '/auth/v1'
+        || !/^[a-z0-9-]+\.supabase\.co$/.test(issuer.hostname)) {
+      throw new Error('invalid_database_origin');
+    }
+    const response = await fetch(new URL('/rest/v1/notes?select=id&limit=1', issuer.origin), {
+      redirect: 'error', signal: AbortSignal.timeout(10000),
+      headers: { apikey: 'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC' },
+    });
+    let data = null;
+    try { data = await response.json(); } catch {}
+    const success = [401, 403].includes(response.status) && data?.code === '42501';
+    return { attackId: 'anonymous_database_read', expected,
+      observed: `HTTP ${response.status}; 권한 거부 확인 ${success ? '통과' : '실패'}` };
+  } catch {
+    return { attackId: 'anonymous_database_read', expected,
+      observed: '요청 실패; DB 직접 읽기 거부를 확인하지 못함' };
+  }
 }
