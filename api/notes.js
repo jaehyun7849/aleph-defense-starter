@@ -68,6 +68,11 @@ export default async function handler(req, res) {
     }
   }
 
+  if (payload && Object.hasOwn(payload, 'owner_id')
+      && payload.owner_id !== identity.userId) {
+    return res.status(403).json({ error: '메모 소유자를 변경할 수 없습니다.' });
+  }
+
   try {
     const db = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
@@ -91,20 +96,19 @@ export default async function handler(req, res) {
       if (error) throw error;
       return res.status(201).json({ id: data.id });
     }
-    // 3단계: 개별 메모는 로그인만 검사합니다.
-    // 타인 메모의 소유자 검사는 과제의 4단계에서 추가합니다.
+    // 메모 ID와 서버가 검증한 소유자를 함께 비교합니다.
     let result;
     if (req.method === 'GET') {
       result = await db.from('notes')
-        .select('id,title,body').eq('id', id).maybeSingle();
+        .select('id,title,body').eq('id', id).eq('owner_id', identity.userId).maybeSingle();
     } else if (req.method === 'PUT') {
       result = await db.from('notes').update({
         title: payload.title.trim(), body: payload.body,
         content: payload.body
-      }).eq('id', id).select('id,title,body').maybeSingle();
+      }).eq('id', id).eq('owner_id', identity.userId).select('id,title,body').maybeSingle();
     } else {
       result = await db.from('notes').delete()
-        .eq('id', id).select('id').maybeSingle();
+        .eq('id', id).eq('owner_id', identity.userId).select('id').maybeSingle();
     }
     if (result.error) throw result.error;
     if (!result.data) {
