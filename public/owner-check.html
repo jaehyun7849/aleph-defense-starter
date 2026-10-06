@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>4단계 소유자 차단 점검</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #101a28; color: #ecf4ff; }
+    main { max-width: 760px; margin: auto; padding: 32px 20px; }
+    p { line-height: 1.7; }
+    form { display: grid; gap: 18px; }
+    fieldset { display: grid; gap: 12px; border: 1px solid #51667c; border-radius: 12px; }
+    label { display: grid; gap: 6px; }
+    input, button { font: inherit; padding: 12px; border: 1px solid #51667c; border-radius: 8px; }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; }
+    li { padding: 8px 0; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>4단계 소유자 차단 점검</h1>
+  <p>A·B 계정으로 임시 가상 메모를 하나씩 만들어 본인 작업과 타인 접근 차단을 검사합니다.
+     기존 메모는 시험 대상으로 사용하지 않습니다. 임시 메모는 마지막에 삭제합니다.</p>
+  <p>입력한 비밀번호는 Supabase 로그인에만 사용하며 결과 파일에는 넣지 않습니다.
+     이 페이지는 토큰을 브라우저 저장소에 저장하지 않습니다.</p>
+  <form id="check-form">
+    <fieldset><legend>A 계정</legend>
+      <label>이메일 <input id="a-email" type="email" autocomplete="off" required></label>
+      <label>비밀번호 <input id="a-password" type="password" autocomplete="off" required></label>
+    </fieldset>
+    <fieldset><legend>B 계정</legend>
+      <label>이메일 <input id="b-email" type="email" autocomplete="off" required></label>
+      <label>비밀번호 <input id="b-password" type="password" autocomplete="off" required></label>
+    </fieldset>
+    <button id="run" type="submit">임시 메모로 점검 시작</button>
+  </form>
+  <p id="status" role="status"></p>
+  <ul id="results" aria-live="polite"></ul>
+  <button id="download" type="button" hidden>점검 결과 JSON 다운로드</button>
+  <p><a href="/">자료실로 돌아가기</a></p>
+</main>
+<script type="module">
+const form = document.querySelector('#check-form');
+const runButton = document.querySelector('#run');
+const status = document.querySelector('#status');
+const results = document.querySelector('#results');
+const downloadButton = document.querySelector('#download');
+let report = null;
+let sdkPromise;
+function addResult(check, passed, detail) {
+  report.checks.push({ check, passed, detail });
+  const item = document.createElement('li');
+  item.textContent = `${passed ? '통과' : '실패'} · ${check} · ${detail}`;
+  results.append(item);
+}
+async function api(method, path, token, payload) {
+  const response = await fetch(path, {
+    method, cache: 'no-store', signal: AbortSignal.timeout(15000),
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(payload ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(payload ? { body: JSON.stringify(payload) } : {})
+  });
+  let data = null;
+  if (response.status !== 204) {
+    try { data = await response.json(); } catch {}
+  }
+  return { status: response.status, data };
+}
+const denied = result => [403, 404].includes(result.status)
+  && typeof result.data?.error === 'string';
+const isUuid = value => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  runButton.disabled = true;
+  downloadButton.hidden = true;
+  results.replaceChildren();
+  report = { schema: 'aleph.owner.selfcheck.v1', checkedAt: new Date().toISOString(),
+    checks: [], limitations: ['이 자기 점검은 공식 심판 판정이 아닙니다.',
+      '이 페이지는 앱 API를 시험하며 DB의 authenticated 역할 직접 접근은 별도 검증이 필요합니다.'] };
+  let tokenA, tokenB, idA, idB;
+  try {
+    status.textContent = '로그인과 임시 메모 점검을 진행 중입니다.';
+    sdkPromise ??= import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm');
+    const { createClient } = await sdkPromise;
+    const client = createClient('https://tajrdnlxsegeburwodnl.supabase.co',
+      'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC', {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+      });
+    async function login(prefix) {
+      const passwordInput = document.querySelector(`#${prefix}-password`);
+      const password = passwordInput.value;
+      passwordInput.value = '';
+      const { data, error } = await client.auth.signInWithPassword({
+        email: document.querySelector(`#${prefix}-email`).value.trim(), password
+      });
+      if (error || !data.session) throw new Error(prefix === 'a'
+        ? 'A 로그인 실패: 이메일과 비밀번호를 확인하세요.'
+        : 'B 로그인 실패: 이메일과 비밀번호를 확인하세요.');
+      return data.session;
+    }
+    const a = await login('a');
+    tokenA = a.access_token;
+    const b = await login('b');
+    tokenB = b.access_token;
+    if (a.user.id === b.user.id) throw new Error('A와 B에는 서로 다른 계정을 입력하세요.');
+    addResult('A·B 로그인', true, '서로 다른 실제 계정');
+
+    const unauthenticated = await api('GET', '/api/notes');
+    addResult('무로그인 목록 차단', [401, 403].includes(unauthenticated.status)
+      && typeof unauthenticated.data?.error === 'string', `HTTP ${unauthenticated.status}`);
+
+    for (const owner of ['A', 'B']) {
+      const result = await api('POST', '/api/notes', owner === 'A' ? tokenA : tokenB,
+        { title: `${owner} 임시 접근 시험`, body: '학습용 임시 시험 자료' });
+      if (isUuid(result.data?.id)) {
+        if (owner === 'A') idA = result.data.id;
+        else idB = result.data.id;
+      }
+      addResult(`${owner} 메모 추가`, result.status === 201 && isUuid(result.data?.id), `HTTP ${result.status}`);
+      if (!isUuid(result.data?.id)) throw new Error('임시 메모 추가에 실패했습니다. API와 DB 설정을 확인하세요.');
+    }
+
+    for (const [label, token, own, other] of [
+      ['A', tokenA, idA, idB], ['B', tokenB, idB, idA]
+    ]) {
+      const list = await api('GET', '/api/notes', token);
+      addResult(`${label} 목록 분리`, list.status === 200 && Array.isArray(list.data)
+        && list.data.some(note => note.id === own) && !list.data.some(note => note.id === other),
+        `HTTP ${list.status}`);
+      const read = await api('GET', '/api/notes/' + own, token);
+      addResult(`${label} 본인 메모 조회`, read.status === 200 && read.data?.id === own, `HTTP ${read.status}`);
+      for (const method of ['GET', 'PUT', 'DELETE']) {
+        const result = await api(method, '/api/notes/' + other, token,
+          method === 'PUT' ? { title: '타인 수정 시험', body: '변경되어서는 안 되는 임시 자료' } : undefined);
+        addResult(`${label} 타인 메모 ${method} 차단`, denied(result), `HTTP ${result.status}`);
+      }
+      const changeOwner = await api('PUT', '/api/notes/' + own, token, {
+        title: '소유자 변경 시험', body: '이 요청은 거부되어야 합니다.',
+        owner_id: label === 'A' ? b.user.id : a.user.id
+      });
+      addResult(`${label} 소유자 변경 차단`, changeOwner.status === 403
+        && typeof changeOwner.data?.error === 'string', `HTTP ${changeOwner.status}`);
+      const intact = await api('GET', '/api/notes/' + own, token);
+      addResult(`${label} 거부 후 기존 내용 유지`, intact.status === 200
+        && intact.data?.body === '학습용 임시 시험 자료', `HTTP ${intact.status}`);
+      const update = await api('PUT', '/api/notes/' + own, token,
+        { title: `${label} 임시 접근 시험`, body: '본인 수정 확인 자료' });
+      const reread = await api('GET', '/api/notes/' + own, token);
+      addResult(`${label} 본인 수정·재조회`, update.status === 200 && reread.status === 200
+        && reread.data?.body === '본인 수정 확인 자료', `PUT ${update.status}, GET ${reread.status}`);
+    }
+  } catch (error) {
+    addResult('점검 실행', false, error.message || '점검 중 오류가 발생했습니다.');
+  } finally {
+    status.textContent = '임시 시험 메모를 정리하고 있습니다.';
+    for (const [label, id, token] of [['A', idA, tokenA], ['B', idB, tokenB]]) {
+      if (!id || !token) continue;
+      try {
+        const removal = await api('DELETE', '/api/notes/' + id, token);
+        const missing = await api('GET', '/api/notes/' + id, token);
+        addResult(`${label} 본인 삭제·삭제 후 404`, removal.status === 204 && missing.status === 404,
+          `DELETE ${removal.status}, GET ${missing.status}`);
+        if (![204, 404].includes(removal.status)) {
+          addResult(`${label} 임시 메모 정리`, false, `자료실에서 임시 접근 시험 메모를 직접 삭제하세요. ID: ${id}`);
+        }
+      } catch {
+        addResult(`${label} 임시 메모 정리`, false, `자료실에서 임시 접근 시험 메모를 직접 삭제하세요. ID: ${id}`);
+      }
+    }
+    tokenA = tokenB = undefined;
+    document.querySelector('#a-password').value = '';
+    document.querySelector('#b-password').value = '';
+    const failed = report.checks.filter(item => !item.passed).length;
+    status.textContent = failed ? `점검 종료: 실패 ${failed}건. 아래 결과를 확인하세요.`
+      : '모든 앱 API 점검이 통과했습니다. 임시 메모도 삭제했습니다.';
+    downloadButton.hidden = false;
+    runButton.disabled = false;
+  }
+});
+downloadButton.addEventListener('click', () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'step4-owner-check-result.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+</script>
+</body>
+</html>
