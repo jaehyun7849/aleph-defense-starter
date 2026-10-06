@@ -1,6 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
+  if (config.step >= 2) return runProtectionChecks(config);
   if (config.step !== 1) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   let app;
   try {
@@ -28,4 +29,57 @@ export async function runAttackChecks(config) {
   }
   return [{ attackId: 'anonymous_note_read', expected: '비로그인 화면에서 가상 메모를 확인',
     observed: visible ? '비로그인 요청에서 공개 가상 메모 확인 표시가 보임' : `비로그인 요청에서 확인 표시가 보이지 않음 (HTTP ${response.status})` }];
+}
+
+async function runProtectionChecks(config) {
+  const app = new URL(config.publicAppUrl);
+  if (app.protocol !== 'https:' || app.username || app.password
+      || app.search || app.hash || app.pathname !== '/'
+      || !app.hostname.endsWith('.vercel.app')) {
+    throw new Error('설정의 실제 Vercel 운영 주소를 확인하세요.');
+  }
+  const attempts = [];
+  async function check(attackId, path, expected, accepts, authorization) {
+    try {
+      const response = await fetch(new URL(path, app), {
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
+        headers: authorization ? { Authorization: authorization } : {},
+      });
+      let data = null;
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        try { data = await response.json(); } catch {}
+      }
+      const success = accepts(response, data);
+      attempts.push({ attackId, expected,
+        observed: `HTTP ${response.status}; 직접 점검 ${success ? '통과' : '실패'}` });
+    } catch {
+      attempts.push({ attackId, expected,
+        observed: '요청 실패; 해당 응답 조건은 확인하지 못함' });
+    }
+  }
+  const denied = (response, data) =>
+    [401, 403].includes(response.status)
+      && typeof data?.error === 'string' && !('notes' in data);
+  await check('anonymous_note_read', '/api/notes',
+    '무로그인 목록 요청은 401 또는 403 JSON 오류로 거부', denied);
+  await check('anonymous_note_item', '/api/notes/00000000-0000-4000-8000-000000000001',
+    '무로그인 개별 메모 요청은 401 또는 403 JSON 오류로 거부', denied);
+  await check('invalid_login_token', '/api/notes',
+    '유효하지 않은 로그인 토큰은 JSON 오류로 거부', denied, 'Bearer invalid');
+  await check('static_notes_removed', '/data.json',
+    '공개 JSON은 404 또는 메모 0건이고 확인 표시가 없음',
+    (response, data) => response.status === 404
+      || (response.ok && Array.isArray(data?.notes) && data.notes.length === 0
+        && !data.sampleMarker));
+  await check('deployment_metadata', '/aleph.json',
+    '배포 메타데이터 JSON의 단계가 현재 설정과 일치',
+    (response, data) => response.ok && data?.step === config.step
+      && /^[a-f0-9]{40}$/i.test(data?.commit ?? ''));
+  await check('home_security_header', '/',
+    '첫 화면에 nosniff 또는 CSP 헤더가 있음',
+    response => response.ok
+      && (response.headers.get('x-content-type-options') === 'nosniff'
+        || Boolean(response.headers.get('content-security-policy'))));
+  return attempts;
 }
