@@ -31,6 +31,6 @@
       "path": "/api/notes/:id"
     }
   ],
-  "originalApiUrl": null,
+  "originalApiUrl": "https://tajrdnlxsegeburwodnl.supabase.co/rest/v1/notes",
   "restoreRoute": null
 }
