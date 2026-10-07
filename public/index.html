@@ -133,13 +133,8 @@
     }
 
     try {
-      const { createClient } = await import(
-        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm'
-      );
-      const supabase = createClient(
-        'https://tajrdnlxsegeburwodnl.supabase.co',
-        'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC'
-      );
+      const { createBrowserAuth } = await import('/auth-client.js');
+      const supabase = { auth: createBrowserAuth() };
 
       async function request(path, method = 'GET', payload) {
         const { data, error } = await supabase.auth.getSession();
@@ -291,7 +286,7 @@
       });
     } catch {
       status.textContent = '로그인 기능을 불러오지 못했습니다.';
-      message.textContent = '인터넷 연결과 공개용 키를 확인하고 새로고침해 주세요.';
+      message.textContent = '인터넷 연결과 서버 로그인 설정을 확인하고 새로고침해 주세요.';
     }
   </script>
 </body>

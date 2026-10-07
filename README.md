@@ -1,39 +1,38 @@
-# 현재 저장점: 4단계 — 로그인한 사용자의 자료만 허용
+# 현재 저장점: 5단계 — 메모 요청을 서버로 제한
 
-- Supabase Auth 이메일·비밀번호 로그인과 로그아웃을 사용합니다.
-- 메모 API는 기존 `src/verify-login.mjs`로 요청 토큰을 검사합니다. 무로그인·검사 실패는 메모 없이 JSON 오류로 거부합니다.
-- 새 메모의 `owner_id`는 서버가 검증한 사용자 ID입니다. 목록은 로그인한 사용자의 메모 배열입니다.
-- 개별 메모의 GET·PUT·DELETE는 UUID와 서버가 검증한 사용자 ID를 함께 비교합니다. 타인 메모는 404 JSON 오류로 거부하며 소유자 변경 시도는 403으로 거부합니다.
-- Supabase notes 테이블에 RLS와 SELECT·INSERT·UPDATE·DELETE의 본인 소유 정책을 적용했습니다. anon 권한은 없고 authenticated에는 네 권한만 부여된 것을 사용자 조회 화면에서 확인했습니다.
-- 정적 JSON은 비어 있고, 이후 단계 빌드에서도 메모와 시작 틀 확인 표시를 포함하지 않습니다. `aleph.json`은 계속 자동 생성합니다.
+- 메모 읽기·추가·수정·삭제는 기존 Vercel API를 사용합니다. 기존 로그인 검증과 소유자 비교는 유지했습니다.
+- 로그인·세션 갱신·로그아웃도 `/api/auth`의 Supabase 공식 SDK를 사용합니다. 사용자 세션마다 SDK 클라이언트를 따로 만듭니다.
+- 화면 두 곳과 공유 브라우저 모듈에 프로젝트 공개 키·서버 키가 없습니다. 서버 환경변수 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`를 그대로 사용합니다.
+- 사용자가 notes 테이블에서 PUBLIC·anon·authenticated 권한을 회수하고 두 역할의 CRUD 권한이 모두 false인 것을 확인했다고 보고했습니다. RLS와 기존 정책·서비스 역할 권한은 유지합니다.
+- 정적 data.json은 비어 있습니다. 빌드가 aleph.json에 단계·allowedRoutes·originalApiUrl을 자동 기록하며 nosniff 헤더는 유지합니다.
 
 ## 운영 주소와 실행 방법
 
 운영 주소: https://choi-bujang-secret-vault-2-pi.vercel.app/
+원본 자료 주소: https://tajrdnlxsegeburwodnl.supabase.co/rest/v1/notes
 
-서버 환경변수는 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`입니다. 실제 키는 Vercel 설정에만 저장합니다.
-브라우저에는 프로젝트 URL과 공개용 Publishable key만 사용합니다.
-
-- `npm ci`: 프로젝트 의존성 설치
-- `npm run build -- --local`: 로컬 정적 결과물 생성. 배포 메타데이터는 생성하지 않습니다.
-- `npm run build`: Vercel Git·배포 환경변수로 메타데이터를 생성합니다.
-- `npm run bundle`: 깨끗한 최신 커밋에서 실제 운영 주소에 자기 점검을 보내 제출 묶음을 생성합니다. 로컬 `bundle-notes.json`에 작업 설명이 필요합니다.
+- `npm install`: 의존성 설치. 실제 키는 Vercel 환경변수에서만 관리합니다.
+- `npm run build -- --local`: 로컬 정적 빌드.
+- `npm run build`: Vercel 시스템 환경변수로 배포 정보 생성.
+- `node --test test/auth-handler.test.mjs`: 모의 SDK로 로그인 API와 브라우저 세션 갱신 검사.
+- 배포 후 `/owner-check.html`: 실제 A·B 계정으로 22개 앱 API 점검. 임시 메모만 만들고 삭제합니다.
+- `npm run bundle`: 깨끗한 최신 커밋에서 운영 주소 자기 점검. 설명을 담은 로컬 bundle-notes.json이 필요합니다.
 
 ## 확인과 한계
 
-사용자가 /owner-check.html에서 실제 A·B 계정으로 실행한 앱 API 점검 결과 22개 모두 통과했다고 보고했습니다. 본인 추가·조회·수정·삭제, 목록 분리, 양방향 타인 조회·수정·삭제 거부, 소유자 변경 거부와 임시 메모 정리를 포함합니다.
-공개용 키만 사용한 Supabase Data API 익명 읽기는 실제 HTTP 401 및 권한 거부 코드 42501을 확인했습니다.
-`src/attack-check.mjs`는 무로그인 요청, 잘못된 토큰, 공개 JSON, 메타데이터, 보안 헤더와 4단계 이후 익명 DB 직접 읽기를 실제 요청으로 검사하며 응답 자료와 토큰을 제출 묶음에 기록하지 않습니다.
-자기 점검은 공식 심판 판정이 아닙니다. bundle 자동 실행에는 A·B 로그인 API 점검 22개가 포함되지 않으며, 이 결과는 사용자의 브라우저 실행 보고와 구분합니다. DB의 authenticated 역할 직접 요청과 위조 서명·만료·다른 발급자 토큰의 개별 시험은 이 자동 실행에서 미검증입니다.
-
-이전 공개 Git 커밋·이전 배포·외부 캐시·이미 내려받은 사본은 이번 작업으로 삭제되지 않았습니다.
-`bundle-notes.json`과 `artifacts/submission.json`은 Git에 커밋하지 않습니다.
+사용자가 권한 회수 후 기존 배포에서 추가·수정·삭제와 로그아웃이 동작한다고 보고했습니다. 새 서버 로그인 코드의 실제 A·B 계정 점검은 배포 후 필요합니다. 로컬 모의 시험은 공식 심판 판정이 아닙니다.
+브라우저 세션은 탭의 sessionStorage에 저장합니다. 같은 탭 새로고침은 유지되고 새 탭은 다시 로그인합니다. 비밀번호는 저장하지 않습니다. 갱신 토큰으로 요청 전 만료를 처리합니다.
+로그아웃은 현재 세션의 갱신 권한을 회수합니다. 이미 발급된 접근 토큰은 만료까지 유효할 수 있습니다.
+/owner-check.html은 시험 세션을 메모리에만 두고 정리 후 로그아웃합니다. 기존 메모는 시험하지 않습니다.
+자동 점검은 공개 요청과 정적 코드·메타데이터 검사입니다. 실제 A·B 로그인과 DB authenticated 역할 직접 요청은 자동 점검에 포함하지 않습니다.
+이전 공개 Git 커밋·배포·외부 캐시·내려받은 사본은 이번 작업으로 삭제되지 않습니다.
+bundle-notes.json과 artifacts/submission.json은 커밋하지 않습니다.
 
 ---
 
 ## 아래는 1단계 시작 틀의 기존 안내입니다
 
-아래 공개 메모 설명은 초기 1단계의 동작이며, 현재 4단계 상태는 위 저장점 기록을 기준으로 확인합니다.
+아래 공개 메모 설명은 초기 1단계의 동작이며, 현재 5단계 상태는 위 저장점 기록을 기준으로 확인합니다.
 
 
 # BYTE BACK 방어전 시작 틀 R5

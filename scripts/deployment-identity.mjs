@@ -26,6 +26,8 @@ export function deploymentIdentity(env, config) {
     commit: commit.toLowerCase(),
     publicAppUrl: `https://${host.toLowerCase()}`,
     judgeIssuer: config.judgeIssuer,
+    ...(config.step >= 3 ? { allowedRoutes: config.allowedRoutes } : {}),
+    ...(config.step >= 5 ? { originalApiUrl: config.originalApiUrl } : {}),
     ...(config.step === 1 ? { sampleMarker: config.sampleMarker } : {}),
   };
 }

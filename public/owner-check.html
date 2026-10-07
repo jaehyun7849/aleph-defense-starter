@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>4단계 소유자 차단 점검</title>
+  <title>5단계 서버 경유·소유자 차단 점검</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     body { margin: 0; background: #101a28; color: #ecf4ff; }
@@ -21,10 +21,10 @@
 </head>
 <body>
 <main>
-  <h1>4단계 소유자 차단 점검</h1>
+  <h1>5단계 서버 경유·소유자 차단 점검</h1>
   <p>A·B 계정으로 임시 가상 메모를 하나씩 만들어 본인 작업과 타인 접근 차단을 검사합니다.
      기존 메모는 시험 대상으로 사용하지 않습니다. 임시 메모는 마지막에 삭제합니다.</p>
-  <p>입력한 비밀번호는 Supabase 로그인에만 사용하며 결과 파일에는 넣지 않습니다.
+  <p>입력한 비밀번호는 서버를 통한 로그인에만 사용하며 결과 파일에는 넣지 않습니다.
      이 페이지는 토큰을 브라우저 저장소에 저장하지 않습니다.</p>
   <form id="check-form">
     <fieldset><legend>A 계정</legend>
@@ -49,7 +49,7 @@ const status = document.querySelector('#status');
 const results = document.querySelector('#results');
 const downloadButton = document.querySelector('#download');
 let report = null;
-let sdkPromise;
+import { authRequest } from '/auth-client.js';
 function addResult(check, passed, detail) {
   report.checks.push({ check, passed, detail });
   const item = document.createElement('li');
@@ -87,23 +87,18 @@ form.addEventListener('submit', async event => {
   let tokenA, tokenB, idA, idB;
   try {
     status.textContent = '로그인과 임시 메모 점검을 진행 중입니다.';
-    sdkPromise ??= import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm');
-    const { createClient } = await sdkPromise;
-    const client = createClient('https://tajrdnlxsegeburwodnl.supabase.co',
-      'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC', {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-      });
     async function login(prefix) {
       const passwordInput = document.querySelector(`#${prefix}-password`);
       const password = passwordInput.value;
       passwordInput.value = '';
-      const { data, error } = await client.auth.signInWithPassword({
-        email: document.querySelector(`#${prefix}-email`).value.trim(), password
-      });
-      if (error || !data.session) throw new Error(prefix === 'a'
-        ? 'A 로그인 실패: 이메일과 비밀번호를 확인하세요.'
-        : 'B 로그인 실패: 이메일과 비밀번호를 확인하세요.');
-      return data.session;
+      try {
+        return await authRequest({ action: 'login',
+          email: document.querySelector(`#${prefix}-email`).value.trim(), password });
+      } catch {
+        throw new Error(prefix === 'a'
+          ? 'A 로그인 실패: 이메일과 비밀번호를 확인하세요.'
+          : 'B 로그인 실패: 이메일과 비밀번호를 확인하세요.');
+      }
     }
     const a = await login('a');
     tokenA = a.access_token;
@@ -174,6 +169,11 @@ form.addEventListener('submit', async event => {
         addResult(`${label} 임시 메모 정리`, false, `자료실에서 임시 접근 시험 메모를 직접 삭제하세요. ID: ${id}`);
       }
     }
+    for (const token of [tokenA, tokenB]) {
+      if (token) {
+        try { await authRequest({ action: 'logout', access_token: token }); } catch {}
+      }
+    }
     tokenA = tokenB = undefined;
     document.querySelector('#a-password').value = '';
     document.querySelector('#b-password').value = '';
@@ -188,7 +188,7 @@ downloadButton.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'step4-owner-check-result.json';
+  a.download = 'step5-owner-check-result.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });

@@ -75,7 +75,8 @@ async function runProtectionChecks(config) {
   await check('deployment_metadata', '/aleph.json',
     '배포 메타데이터 JSON의 단계가 현재 설정과 일치',
     (response, data) => response.ok && data?.step === config.step
-      && /^[a-f0-9]{40}$/i.test(data?.commit ?? ''));
+      && /^[a-f0-9]{40}$/i.test(data?.commit ?? '')
+      && (config.step < 5 || (Array.isArray(data.allowedRoutes) && data.allowedRoutes.length > 0)));
   await check('home_security_header', '/',
     '첫 화면에 nosniff 또는 CSP 헤더가 있음',
     response => response.ok
@@ -83,6 +84,21 @@ async function runProtectionChecks(config) {
         || Boolean(response.headers.get('content-security-policy'))));
   if (config.step >= 4) {
     attempts.push(await checkAnonymousDatabase(config));
+  }
+  if (config.step >= 5) {
+    for (const path of ['/', '/owner-check.html', '/auth-client.js']) {
+      try {
+        const response = await fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
+        const text = await response.text();
+        const success = response.ok && !/sb_(?:publishable|secret)_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(text);
+        attempts.push({ attackId: 'browser_key_' + (path === '/' ? 'home' : path.slice(1).replace(/[^a-z0-9]/g, '_')),
+          expected: '배포된 화면과 공유 모듈에 Supabase 키가 없음',
+          observed: `HTTP ${response.status}; 공개 코드 키 검사 ${success ? '통과' : '실패'}` });
+      } catch {
+        attempts.push({ attackId: 'browser_key_' + (path === '/' ? 'home' : path.slice(1).replace(/[^a-z0-9]/g, '_')),
+          expected: '배포된 화면과 공유 모듈에 Supabase 키가 없음', observed: '요청 실패; 확인하지 못함' });
+      }
+    }
   }
   return attempts;
 }
@@ -97,7 +113,11 @@ async function checkAnonymousDatabase(config) {
         || !/^[a-z0-9-]+\.supabase\.co$/.test(issuer.hostname)) {
       throw new Error('invalid_database_origin');
     }
-    const response = await fetch(new URL('/rest/v1/notes?select=id&limit=1', issuer.origin), {
+    const original = config.step >= 5 ? new URL(config.originalApiUrl) : new URL('/rest/v1/notes', issuer.origin);
+    if (original.origin !== issuer.origin || original.pathname !== '/rest/v1/notes'
+        || original.search || original.hash || original.username || original.password) throw new Error('invalid_original_api');
+    original.search = '?select=id&limit=1';
+    const response = await fetch(original, {
       redirect: 'error', signal: AbortSignal.timeout(10000),
       headers: { apikey: 'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC' },
     });
