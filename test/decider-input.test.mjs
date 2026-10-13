@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decide, inspectConnectionInput, RULE_IDS } from '../src/decider.mjs';
+import { inspectConnectionInput, RULE_IDS } from '../src/decider.mjs';
+import { createFixtureDecider } from '../scripts/fixture-resource-context.mjs';
+const decide = createFixtureDecider();
 import { fixtureRequests } from '../scripts/fixture-7.mjs';
 
 test('fixture signals stay simulated and registered-device behavior is preserved', async () => {
@@ -11,7 +13,7 @@ test('fixture signals stay simulated and registered-device behavior is preserved
   const denied = await decide({ ...normal, deviceRegistered: false });
   assert.equal(denied.decision, 'deny');
   assert.equal(denied.reasonCode, 'device_not_registered');
-  assert.deepEqual(RULE_IDS, ['device_registered', 'step_up_required']);
+  assert.deepEqual(RULE_IDS, ['device_registered', 'step_up_required', 'resource_scope']);
   assert.deepEqual(normal, before);
 });
 

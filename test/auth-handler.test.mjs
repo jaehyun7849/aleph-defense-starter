@@ -123,6 +123,6 @@ test('static pages have no provider keys or direct SDK/data calls; metadata pres
     VERCEL_GIT_REPO_SLUG: 'aleph-defense-starter', VERCEL_GIT_COMMIT_SHA: 'a'.repeat(40),
     VERCEL_URL: 'test.vercel.app' }, config);
   assert.deepEqual(identity.allowedRoutes, config.allowedRoutes);
-  assert.equal(identity.step, 5);
+  assert.equal(identity.step, config.step);
   assert.equal(identity.originalApiUrl, config.originalApiUrl);
 });

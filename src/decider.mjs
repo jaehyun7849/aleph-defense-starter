@@ -1,7 +1,8 @@
 // ALEPH SDP 엔진이 확인한 요청만 받는 학생 판정기 시작점입니다.
 // 6단계: 엔진이 등록 상태를 확인한 기기의 자료실 요청만 허용합니다.
 // 요청 본문의 userId, role, 기기 키, 토큰을 별도로 믿거나 저장하지 마세요.
-export const RULE_IDS = Object.freeze(['device_registered', 'step_up_required']);
+import { matchResourceRoute, canAccessResource } from './resource-policy.mjs';
+export const RULE_IDS = Object.freeze(['device_registered', 'step_up_required', 'resource_scope']);
 
 const REQUEST_FIELDS = new Set([
   'schema', 'requestId', 'classId', 'projectId', 'subjectId', 'deviceId',
@@ -49,9 +50,23 @@ export function inspectConnectionInput(request) {
   };
 }
 
-export async function decide(request) {
+export function createDecider({ resolveResource }) {
+return async function decide(request) {
   const connection = inspectConnectionInput(request);
   const registered = request.deviceRegistered === true;
+  const response = (decision, reasonCode, ruleIds) => ({
+    schema: 'aleph.decision.v1', requestId: request.requestId, decision, reasonCode, ruleIds,
+  });
+  if (!registered) return response('deny', 'device_not_registered', ['device_registered']);
+  const route = matchResourceRoute(request.path, request.method);
+  if (request.service !== 'notes' || !route || request.route !== route.route || request.queryLength !== 0) {
+    return response('deny', 'resource_not_allowed', ['device_registered', 'resource_scope']);
+  }
+  let context;
+  try { context = await resolveResource(request, route); } catch { context = null; }
+  if (!context || !canAccessResource({ ...context, method: request.method })) {
+    return response('deny', 'resource_forbidden', ['device_registered', 'resource_scope']);
+  }
   // These thresholds describe the supplied judge fixture, not a learned
   // location history. Region alone never triggers this rule.
   const unusualHour = connection.hour !== null
@@ -70,7 +85,7 @@ export async function decide(request) {
       requestId: request.requestId,
       decision: 'step_up',
       reasonCode: 'step_up_required',
-      ruleIds: ['device_registered', 'step_up_required'],
+      ruleIds: ['device_registered', 'resource_scope', 'step_up_required'],
     };
   }
   return {
@@ -79,6 +94,17 @@ export async function decide(request) {
     decision: registered ? 'allow' : 'deny',
     reasonCode: registered ? 'approved' : 'device_not_registered',
     ruleIds: registered && needsStepUp
-      ? ['device_registered', 'step_up_required'] : ['device_registered'],
+      ? ['device_registered', 'resource_scope', 'step_up_required'] : ['device_registered', 'resource_scope'],
   };
+};
+}
+
+let productionDecider;
+export async function decide(request) {
+  if (!productionDecider) {
+    const { createClient } = await import('@supabase/supabase-js');
+    const { createEngineResourceResolver } = await import('./engine-resource-context.mjs');
+    productionDecider = createDecider({ resolveResource: createEngineResourceResolver({ createClient }) });
+  }
+  return productionDecider(request);
 }
