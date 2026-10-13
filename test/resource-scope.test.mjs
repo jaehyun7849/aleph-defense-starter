@@ -190,6 +190,7 @@ test('engine resolver requires explicit class/project/subject binding and a stor
   const resolver = createEngineResourceResolver({ createClient: () => db, env });
   const decide = createDecider({ resolveResource: resolver });
   const { normal } = fixtureRequests();
+  normal.path = `/notes/${NOTE}`;
   assert.equal((await decide(normal)).decision, 'deny');
   env.VAULT_RESOURCE_POLICY = JSON.stringify({ noticeIds: [NOTICE], instructorUserIds: [], subjects: [
     { classId: normal.classId, projectId: normal.projectId, subjectId: normal.subjectId, userId: A },

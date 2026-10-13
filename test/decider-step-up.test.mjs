@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFixtureDecider } from '../scripts/fixture-resource-context.mjs';
-const decide = createFixtureDecider();
+import { decide } from '../src/decider.mjs';
 import { fixtureRequests } from '../scripts/fixture-7.mjs';
 
 test('compound fixture requests reauthentication with a reason and the contract response', async () => {

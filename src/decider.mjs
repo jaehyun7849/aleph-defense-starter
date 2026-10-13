@@ -2,6 +2,7 @@
 // 6단계: 엔진이 등록 상태를 확인한 기기의 자료실 요청만 허용합니다.
 // 요청 본문의 userId, role, 기기 키, 토큰을 별도로 믿거나 저장하지 마세요.
 import { matchResourceRoute, canAccessResource } from './resource-policy.mjs';
+import { registeredEngineResource, hasEngineResourceGrant } from './engine-resource-grants.mjs';
 export const RULE_IDS = Object.freeze(['device_registered', 'step_up_required', 'resource_scope']);
 
 const REQUEST_FIELDS = new Set([
@@ -58,13 +59,22 @@ return async function decide(request) {
     schema: 'aleph.decision.v1', requestId: request.requestId, decision, reasonCode, ruleIds,
   });
   if (!registered) return response('deny', 'device_not_registered', ['device_registered']);
-  const route = matchResourceRoute(request.path, request.method);
+  const resource = registeredEngineResource(request.path);
+  const route = resource
+    ? { route: `${request.method} ${resource.route}` }
+    : matchResourceRoute(request.path, request.method);
   if (request.service !== 'notes' || !route || request.route !== route.route || request.queryLength !== 0) {
     return response('deny', 'resource_not_allowed', ['device_registered', 'resource_scope']);
   }
-  let context;
-  try { context = await resolveResource(request, route); } catch { context = null; }
-  if (!context || !canAccessResource({ ...context, method: request.method })) {
+  let authorized = false;
+  if (resource) {
+    authorized = hasEngineResourceGrant(request, resource);
+  } else {
+    let context;
+    try { context = await resolveResource(request, route); } catch { context = null; }
+    authorized = !!context && canAccessResource({ ...context, method: request.method });
+  }
+  if (!authorized) {
     return response('deny', 'resource_forbidden', ['device_registered', 'resource_scope']);
   }
   // These thresholds describe the supplied judge fixture, not a learned
@@ -99,12 +109,15 @@ return async function decide(request) {
 };
 }
 
-let productionDecider;
-export async function decide(request) {
-  if (!productionDecider) {
+let serverResourceResolver;
+const productionDecider = createDecider({ resolveResource: async (request, route) => {
+  if (!serverResourceResolver) {
     const { createClient } = await import('@supabase/supabase-js');
     const { createEngineResourceResolver } = await import('./engine-resource-context.mjs');
-    productionDecider = createDecider({ resolveResource: createEngineResourceResolver({ createClient }) });
+    serverResourceResolver = createEngineResourceResolver({ createClient });
   }
+  return serverResourceResolver(request, route);
+} });
+export async function decide(request) {
   return productionDecider(request);
 }

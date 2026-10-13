@@ -1,12 +1,14 @@
 # 현재 구현: 8단계 — 자료마다 갈 수 있는 구역을 나눕니다
 
-기존 메모·UUID·본문·주소와 화면 메뉴를 보존하고, 개인 메모와 강사 공지의 자원 ID 및 서버 권한 검사를 추가했습니다. 마지막 커밋 저장점은 7단계이며 8단계 변경은 아직 커밋·푸시·배포하지 않았습니다. 설정의 단계는 8입니다.
+기존 메모·UUID·본문·주소와 화면 메뉴를 보존하고, 개인 메모와 강사 공지의 자원 ID 및 서버 권한 검사를 추가했습니다. 8단계 저장점은 2acc339, API 경로 수정은 88c45dc입니다. 이후 아래 판정기 정상 요청 복구는 작업 중 변경이며 아직 커밋·푸시·배포하지 않았습니다. 설정의 단계는 8입니다.
 
 개인 메모는 `personal_note:<UUID>`, 서버에서 지정한 공지는 `instructor_notice:<UUID>`로 표시합니다. 기존 `/api/notes/:id` 주소도 유지합니다. 서버 저장 공지 목록·강사 목록과 엔진 주체 매핑은 Vercel 환경변수 `VAULT_RESOURCE_POLICY`에서 관리합니다. 기본값은 공지·강사·엔진 매핑이 없는 상태입니다. 기존 메모를 자동으로 공지로 지정하지 않습니다.
 
-API는 본인 메모만 목록·조회·변경하고, 공지는 로그인 사용자에게 읽기를 허용하며 수정은 서버 등록 강사만 허용합니다. 판정기에는 `resource_scope`를 추가하고 검증된 엔진 경로와 서버 소유자·권한을 대조합니다. 엔진 주체 매핑이 없으면 판정기는 거부합니다. 운영 경로·이유 코드 등록과 실제 계정 검증은 아직 미실행입니다. [8단계 설정과 한계](docs/RESOURCE_SCOPES.md)를 확인하세요.
+API는 본인 메모만 목록·조회·변경하고, 공지는 로그인 사용자에게 읽기를 허용하며 수정은 서버 등록 강사만 허용합니다. 판정기에는 `resource_scope`를 추가하고 검증된 엔진 경로와 서버 소유자·권한을 대조합니다. 실제 UUID 메모는 엔진 주체 매핑이 없으면 거부합니다. 사용자가 88c45dc 배포의 실제 A/B API 점검 22건 통과를 보고했습니다. 운영 경로·이유 코드 등록과 실제 공지/강사 검증은 미실행입니다. [8단계 설정과 한계](docs/RESOURCE_SCOPES.md)를 확인하세요.
 
-검사 명령: `node --test test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs test/auth-handler.test.mjs`. 2026-10-13 로컬 모의 검사 21건이 통과했고 `npm run decider:test`의 9개 판정기 연습 및 `npm run fixture:7`도 통과했습니다. 로컬 연습은 모의 권한을 주입하며 운영 판정기는 모의 값을 사용하지 않습니다.
+정상 요청 복구: 제공 시작 틀의 `/notes/demo`를 UUID 전용 검사로 거부하면서 연습 요청도 다른 UUID로 바꾸고, 시험에서만 모의 판정기를 사용했던 불일치를 고쳤습니다. `src/engine-resource-grants.mjs`에 공개 가상 자료 `personal_note:demo`의 반·프로젝트·주체·기기 및 GET/PUT 권한을 명시했습니다. 이 권한은 signals.source와 무관하며 등록 기기·추가 확인 검사를 통과해야 합니다. 실제 UUID 메모·강사 권한으로 확장되지 않습니다. DB 패키지는 실제 UUID 자원 조회에만 로딩합니다.
+
+검사 명령: `node --test test/decider-entry.test.mjs test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs test/auth-handler.test.mjs`. 로컬 검사 24건, `npm run decider:test` 9건 및 `npm run fixture:7`이 통과했습니다. 두 npm 명령은 이제 실제 제출 함수 `decide()`를 호출하며 원본 가상 요청 주소를 사용합니다. 모의 DB/강사 검사는 별도 단위 시험에만 있습니다. 실제 심판 재제출은 아직 실행하지 않았습니다.
 
 ## 보존한 7단계 저장점
 

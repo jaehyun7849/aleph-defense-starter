@@ -24,10 +24,12 @@
 
 등록 기기 검사와 복합 이상 재확인 규칙을 유지하며 새 RULE_IDS 항목은 `resource_scope`입니다. 운영 이유 코드 등록부에 `resource_not_allowed`, `resource_forbidden`을 등록해야 합니다. 이 저장소에서 외부 등록부는 수정하지 않았습니다.
 
-엔진 주체 매핑이 없거나 소유자 조회가 실패하면 판정기는 허용하지 않습니다. 로컬 연습만 scripts/fixture-resource-context.mjs의 가상 등록 정보를 주입합니다. 운영 decide는 이 파일을 불러오지 않습니다. 로컬 검사의 통과는 운영 엔진 연결·등록부·실제 A/B 계정 검증을 대신하지 않습니다.
+실제 UUID 메모는 엔진 주체 매핑이 없거나 소유자 조회가 실패하면 판정기가 허용하지 않습니다. 제공 시작 틀의 공개 가상 자료 `/notes/demo`는 `src/engine-resource-grants.mjs`에 별도로 등록합니다. `class_fixture/project_fixture/learner_fixture`, 기기 `aaaaaaaaaaaaaaaa`, 서비스 notes, 정확한 자원 경로, GET/PUT만 일치해야 합니다. 이는 Supabase 사용자나 강사 역할을 만드는 매핑이 아닙니다. 등록 기기와 추가 확인 규칙도 그대로 적용하고 signals.source로 특별 허용하지 않습니다. API의 UUID 경로 규칙과 실제 자료 권한은 바뀌지 않습니다.
+
+원본 연습 요청은 [제공 시작 틀의 fixture-7.mjs](https://github.com/ChoiTimo/aleph-defense-starter/blob/main/scripts/fixture-7.mjs)를 기준으로 복구했습니다. `npm run decider:test`와 `npm run fixture:7`은 모의 판정기를 주입하지 않고 제출 함수 decide를 직접 호출합니다. scripts/fixture-resource-context.mjs는 모의 DB/강사 권한 단위 시험에서만 사용합니다. 로컬 검사의 통과는 운영 엔진 연결·등록부·실제 심판 판정을 대신하지 않습니다.
 
 ```powershell
-node --test test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs
+node --test test/decider-entry.test.mjs test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs
 ```
 
 화면 조작은 없습니다. 실제 계정으로 기존 메모의 소유자 분리를 확인하려면 배포 후 `/owner-check.html`을 사용할 수 있습니다. 실제 공지/강사 검증은 서버에 자원을 지정한 후 별도로 해야 합니다. 기존 7단계 재로그인 시각 검증·자료 전달 보류 연결도 아직 미실행입니다.

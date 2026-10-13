@@ -2,13 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createFixtureDecider, FIXTURE_NOTE_ID } from './fixture-resource-context.mjs';
 
 // Local practice requests use the engine's public input shape. The judge sends and times its own events.
 const request = (signals, recentEvents) => ({
   schema: 'aleph.decision.v1', requestId: randomUUID(), classId: 'class_fixture',
   projectId: 'project_fixture', subjectId: 'learner_fixture', deviceId: 'a'.repeat(16),
-  service: 'notes', method: 'GET', path: `/notes/${FIXTURE_NOTE_ID}`, route: 'GET /notes/:id',
+  service: 'notes', method: 'GET', path: '/notes/demo', route: 'GET /notes/:id',
   queryLength: 0, querySha256: createHash('sha256').update('').digest('hex'),
   at: new Date().toISOString(), policyRevision: 1, deviceRegistered: true,
   stepUp: { verified: false, authAgeSeconds: null }, recentEvents, signals,
@@ -29,7 +28,7 @@ const check = (input, output) => output && typeof output === 'object'
 if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const { normal, suspicious } = fixtureRequests();
-    const decide = createFixtureDecider();
+    const { decide } = await import('../src/decider.mjs');
     if (typeof decide !== 'function') throw new Error('src/decider.mjs에서 decide 함수를 내보내야 합니다.');
     const ordinary = await decide(normal);
     const unusual = await decide(suspicious);

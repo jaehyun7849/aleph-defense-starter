@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectConnectionInput, RULE_IDS } from '../src/decider.mjs';
-import { createFixtureDecider } from '../scripts/fixture-resource-context.mjs';
-const decide = createFixtureDecider();
+import { decide, inspectConnectionInput, RULE_IDS } from '../src/decider.mjs';
 import { fixtureRequests } from '../scripts/fixture-7.mjs';
 
 test('fixture signals stay simulated and registered-device behavior is preserved', async () => {
