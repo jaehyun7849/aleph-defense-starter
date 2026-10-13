@@ -10,8 +10,7 @@ export function createEngineResourceResolver({ createClient, env = process.env }
     if (!binding) return null;
     const userId = binding.userId.toLowerCase();
     const isInstructor = policy.instructorUserIds.has(userId);
-    if (route.collection) return { userId, isInstructor,
-      resource: { kind: route.kind, ownerUserId: userId } };
+    if (route.collection) return null;
     const kind = resourceKind(route.id, policy);
     // Legacy /notes/:id still addresses notices after an operator classifies
     // them. A /notices/:id request may never address an unclassified memo.
