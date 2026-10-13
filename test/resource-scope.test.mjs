@@ -57,6 +57,38 @@ function harness({ configured = true } = {}) {
   return { db, call };
 }
 
+test('dynamic function URLs preserve own CRUD and reject foreign resources and selectors', async () => {
+  const { call } = harness();
+  const rewritten = `/api/notes/[id]?id=${NOTE}`;
+  const captured = `/api/notes/${NOTE}?id=${NOTE}`;
+  assert.equal((await call('GET', rewritten)).code, 200);
+  assert.equal((await call('GET', captured)).code, 200);
+  for (const method of ['GET', 'PUT', 'DELETE']) {
+    const result = await call(method, rewritten, 'fixture-b',
+      method === 'PUT' ? { title: 'attempt', body: 'attempt' } : undefined);
+    assert.equal(result.code, 404);
+    assert.equal(result.data.reasonCode, 'resource_forbidden');
+  }
+  for (const path of [
+    `/api/notes?id=${NOTE}`, `/api/notes/${NOTE}?id=${NOTICE}`,
+    `${rewritten}&id=${NOTE}`, `${rewritten}&role=instructor`,
+    '/api/notes/[id]?id=export', '/api/notes/[id]',
+  ]) assert.equal((await call('GET', path)).data.reasonCode, 'resource_not_allowed');
+  assert.equal((await call('PUT', rewritten, 'fixture-a', {
+    title: 'attempt', body: 'attempt', owner_id: B,
+  })).code, 403);
+  assert.equal((await call('PUT', rewritten, 'fixture-a', {
+    title: 'updated fixture', body: 'updated fixture',
+  })).code, 200);
+  assert.equal((await call('GET', captured)).data.body, 'updated fixture');
+  assert.equal((await call('GET', `/api/notices/[id]?id=${NOTICE}`)).code, 200);
+  assert.equal((await call('PUT', `/api/notices/[id]?id=${NOTICE}`, 'fixture-a', {
+    title: 'attempt', body: 'attempt', role: 'instructor',
+  })).code, 403);
+  assert.equal((await call('DELETE', rewritten)).code, 204);
+  assert.equal((await call('GET', rewritten)).code, 404);
+});
+
 test('API resources keep old memo addresses and distinguish notice IDs without changing rows', async () => {
   const { call, db } = harness();
   const before = structuredClone(db.rows);

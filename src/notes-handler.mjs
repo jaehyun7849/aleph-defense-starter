@@ -10,6 +10,26 @@ function readBody(req) {
   return value;
 }
 
+function apiResourceRoute(rawUrl) {
+  const url = new URL(rawUrl, 'https://local.invalid');
+  // Vercel can pass the dynamic function destination and its captured id.
+  // This is routing only: never infer ownership or role from query values.
+  const template = /^\/api\/(notes|notices)\/\[id\]$/.exec(url.pathname);
+  const entries = [...url.searchParams];
+  let path = url.pathname;
+  if (template) {
+    if (entries.length !== 1 || entries[0][0] !== 'id' || !UUID.test(entries[0][1])) return null;
+    path = `/api/${template[1]}/${entries[0][1]}`;
+  }
+  const route = matchResourceRoute(path, 'GET', { api: true });
+  if (!route) return null;
+  // A captured id may also be appended to the concrete URL. It must repeat
+  // its path id exactly, never select another resource or a collection item.
+  if (url.search && (!route.id || entries.length !== 1 || entries[0][0] !== 'id'
+      || entries[0][1].toLowerCase() !== route.id)) return null;
+  return route;
+}
+
 export function createNotesHandler({ createClient, verifyLogin, env = process.env }) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -24,10 +44,8 @@ export function createNotesHandler({ createClient, verifyLogin, env = process.en
     } catch { return fail(500, 'server_configuration', '서버 로그인·자원 설정을 확인하세요.'); }
     if (!identity || !UUID.test(identity.userId ?? '')) return fail(401, 'invalid_login', '유효한 로그인이 필요합니다.');
 
-    const url = new URL(req.url, 'https://local.invalid');
-    const route = matchResourceRoute(url.pathname, 'GET', { api: true });
-    // Queries never select a different resource or an export function.
-    if (!route || url.search) return fail(404, 'resource_not_allowed', '허용된 자료 경로가 아닙니다.');
+    const route = apiResourceRoute(req.url);
+    if (!route) return fail(404, 'resource_not_allowed', '허용된 자료 경로가 아닙니다.');
     const allowed = route.collection ? ['GET', 'POST'] : ['GET', 'PUT', 'DELETE'];
     if (!allowed.includes(req.method)) {
       res.setHeader('Allow', allowed.join(', '));
