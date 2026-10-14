@@ -69,12 +69,27 @@ async function browser() {
   const saved = new Map();
   globalThis.sessionStorage = { getItem: key => saved.get(key) ?? null,
     setItem: (key, value) => saved.set(key, value), removeItem: key => saved.delete(key) };
+  globalThis.localStorage = { removeItem() {} };
   const module = await import('../public/auth-client.js');
   return { auth: module.createBrowserAuth(), saved };
 }
+
+test('browser object error displays HTTP status without coercing or disclosing the error payload', async () => {
+  const { authRequest } = await import('../public/auth-client.js');
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: {
+    code: 'fixture_failure', message: 'fixture internal diagnostic', access_token: 'fixture-private-value'
+  } }), { status: 401 });
+  await assert.rejects(() => authRequest({ action: 'login' }), error => {
+    assert.match(error.message, /HTTP 401/);
+    assert.doesNotMatch(error.message, /object Object|fixture internal diagnostic|fixture-private-value/);
+    return true;
+  });
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: '로그인 요청 형식을 확인하세요.' }), { status: 400 });
+  await assert.rejects(() => authRequest({ action: 'login' }), { message: '로그인 요청 형식을 확인하세요.' });
+});
 const session = (access, expired = false) => ({ access_token: access, refresh_token: 'test-refresh',
   expires_at: Math.floor(Date.now() / 1000) + (expired ? -10 : 3600), user: { id: 'test-id' } });
-test('browser login, reload, single concurrent refresh and logout use server routes only', async () => {
+test('browser keeps login only in memory, refreshes once, and requires login in a new page', async () => {
   const { auth, saved } = await browser();
   const requests = [];
   globalThis.fetch = async (path, options) => {
@@ -89,11 +104,23 @@ test('browser login, reload, single concurrent refresh and logout use server rou
   assert.equal(a.data.session.access_token, 'refresh');
   assert.equal(b.data.session.access_token, 'refresh');
   assert.deepEqual(requests, ['login', 'refresh']);
-  assert.equal((await (await import('../public/auth-client.js')).createBrowserAuth().getSession()).data.session.access_token, 'refresh');
+  assert.equal((await (await import('../public/auth-client.js')).createBrowserAuth().getSession()).data.session, null);
+  assert.equal(saved.size, 0);
   assert.equal([...saved.values()].join('').includes('test-password'), false);
   await auth.signOut();
   assert.equal((await auth.getSession()).data.session, null);
   assert.equal(saved.size, 0);
+});
+
+test('legacy serialized session is removed without reading it or clearing unrelated storage', async () => {
+  const saved=new Map([['vault-session-v5','legacy fixture'],['unrelated','preserved']]);
+  const store={getItem(){throw new Error('must not read storage');},setItem(){throw new Error('must not persist');},
+    removeItem:key=>saved.delete(key)};
+  globalThis.sessionStorage=store;globalThis.localStorage=store;
+  const {createBrowserAuth}=await import('../public/auth-client.js');
+  assert.equal((await createBrowserAuth().getSession()).data.session,null);
+  assert.deepEqual([...saved],[['unrelated','preserved']]);
+  delete globalThis.localStorage;
 });
 
 test('late refresh cannot restore a session after logout', async () => {

@@ -53,14 +53,14 @@ test('pending, unconnected, malformed and offline results keep protected access 
   assert.equal(h.access.includes(true), false);
 });
 
-test('button response alone does not grant approval; a subsequent server GET must confirm it', async () => {
+test('button and approved JSON labels cannot grant access without an engine device proof contract', async () => {
   const h = await harness();
   h.reply({ ...approved, state: 'pending' });
   assert.equal(await h.gate.requestApproval(), false);
   assert.deepEqual(h.requests.map(r => r.method), ['POST', 'GET']);
   assert.equal(h.access.includes(true), false);
-  h.reply(approved); assert.equal(await h.gate.check(), true);
-  assert.equal(h.access.at(-1), true);
+  h.reply(approved); assert.equal(await h.gate.check(), false);
+  assert.equal(h.access.includes(true), false);
   h.gate.invalidate(); assert.equal(h.access.at(-1), false);
 });
 
@@ -74,7 +74,7 @@ test('a status result arriving after logout cannot reopen protected access', asy
   assert.equal(await checking, false); assert.equal(h.access.includes(true), false);
 });
 
-test('actual page makes no memo request before verification and opens the existing list only after mocked server approval', async () => {
+test('actual page makes no memo request even when a mock returns approved labels without engine proof', async () => {
   const h = await harness(), timers = [], nodes = new Map();
   const node = id => {
     if (!nodes.has(id)) nodes.set(id, { hidden: true, textContent: '', value: '', disabled: false, children: [], listeners: {},
@@ -104,8 +104,8 @@ test('actual page makes no memo request before verification and opens the existi
   assert.equal(calls.includes('/api/notes'), false);
   assert.equal(node('#notes').hidden, true); assert.equal(node('#note-form').hidden, true);
   state = 'approved'; await node('#device-refresh').listeners.click();
-  assert.equal(calls.filter(path => path === '/api/notes').length, 1);
-  assert.equal(node('#notes').hidden, false); assert.equal(node('#note-form').hidden, false);
+  assert.equal(calls.filter(path => path === '/api/notes').length, 0);
+  assert.equal(node('#notes').hidden, true); assert.equal(node('#note-form').hidden, true);
   await node('#logout-button').listeners.click();
   assert.equal(node('#notes').hidden, true); assert.equal(node('#notes').children.length, 0);
 });

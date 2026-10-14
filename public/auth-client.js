@@ -7,23 +7,27 @@ export async function authRequest(payload) {
   });
   if (response.status === 204) return null;
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '로그인 요청에 실패했습니다.');
+  if (!response.ok) {
+    // Do not stringify provider/proxy error objects: they can contain private
+    // diagnostics, and object coercion hides the useful HTTP status.
+    const message = typeof result?.error === 'string' && result.error.trim()
+      ? result.error : `로그인 요청을 처리하지 못했습니다. (HTTP ${response.status})`;
+    throw new Error(message);
+  }
   return result.session;
 }
 
 export function createBrowserAuth() {
-  const storageKey = 'vault-session-v5';
+  // Remove only this app's legacy serialized session. Do not inspect or clear
+  // other applications' storage. Credentials now live only in page memory.
+  try { sessionStorage.removeItem('vault-session-v5'); } catch {}
+  try { localStorage.removeItem('vault-session-v5'); } catch {}
   let session = null;
-  try { session = JSON.parse(sessionStorage.getItem(storageKey)); } catch {}
   let generation = 0;
   let refreshing;
   const listeners = new Set();
   function save(value) {
     session = value;
-    try {
-      if (session) sessionStorage.setItem(storageKey, JSON.stringify(session));
-      else sessionStorage.removeItem(storageKey);
-    } catch {}
     for (const listener of listeners) listener(session ? 'SIGNED_IN' : 'SIGNED_OUT', session);
   }
   async function getSession() {
@@ -49,7 +53,7 @@ export function createBrowserAuth() {
     getSession,
     onAuthStateChange(listener) {
       listeners.add(listener);
-      // Preserve the initial login view after a page reload.
+      // A new page requires login; no stored session or device evidence is read.
       queueMicrotask(async () => {
         const result = await getSession();
         listener('INITIAL_SESSION', result.data.session);

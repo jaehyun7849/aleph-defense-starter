@@ -40,19 +40,11 @@ export function createDeviceApproval({ getSession, onAccessChange, status }) {
     try {
       const data = await call('GET');
       if (!data) return false;
-      // This shape belongs to this UI adapter, not to an invented engine API.
-      // The current production adapter only returns 503, never this success.
-      const approved = data.schema === 'aleph.device-approval.v1'
-        && data.state === 'approved' && data.deviceRegistered === true
-        && /^[a-f0-9]{16}$/.test(data.deviceId ?? '');
-      if (!approved) {
-        invalidate(data.state === 'pending' ? '기기 승인: 심사 대기 · 자료실이 잠겨 있습니다.'
-          : '기기 승인: 미승인 또는 확인 불가 · 자료실이 잠겨 있습니다.');
-        return false;
-      }
-      status.textContent = '기기 승인: 서버가 이 기기의 등록 상태를 확인했습니다.';
-      onAccessChange(true);
-      return true;
+      // The connected engine proof contract is absent. Even an "approved"
+      // label in JSON is not a verified device proof and must not unlock data.
+      invalidate(data.state === 'pending' ? '기기 승인: 심사 대기 · 자료실이 잠겨 있습니다.'
+        : '기기 승인: 검증된 기기 연결이 없습니다. 자료실이 잠겨 있습니다.');
+      return false;
     } catch {
       invalidate('기기 승인: 서버에 연결할 수 없습니다. 자료실이 잠겨 있습니다.');
       return false;
