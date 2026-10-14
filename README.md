@@ -1,5 +1,14 @@
 # 현재 구현: 11단계 — 나만의 접속 앱을 완성합니다 (실제 기기 승인 미연결)
 
+## 승인 연결 회귀 수정 (2026-10-14)
+
+`c432f6dedd6e`에서 없는 `createSignedHeaders`를 가져와 로그인 화면의 모듈 시작이 실패하는 오류를 고쳤습니다. 공식 엔진 계약 없이 자체 공개키를 등록하고 프로세스 메모리 Map을 승인 기록으로 사용하는 서버 경로도 제거했습니다. `api/device-approval.js`에 잘못 들어간 브라우저 코드를 서버 진입점으로 바꿨습니다. 기기 승인 API는 연결 미준비를 명확히 반환하며, 보호 자료 API는 검증된 기기 연결이 없으면 기존 자료 처리 함수를 호출하지 않습니다.
+
+실제 기기 승인 및 승인 후 정상 자료 접근은 아직 연결되지 않았습니다. 이 수정은 로그인 화면의 시작 오류와 임의 승인 구현을 바로잡는 작업이며 11단계 심판 통과를 의미하지 않습니다. 공식 승인 요청·상태 조회·자료 경로의 기기 증명 계약이 필요합니다.
+
+확인 명령: `node --test test/device-approval-regression.test.mjs test/device-approval.test.mjs test/protected-device.test.mjs test/auth-handler.test.mjs test/webapp.test.mjs test/resource-scope.test.mjs test/note-restore.test.mjs`. 관련 검사 37건과 `npm run decider:test`의 가상 요청 9건이 통과했습니다. 전체 검사 결과는 67건 통과·기존 실패 2건·링크 생성 권한 부족으로 미실행 1건입니다. 두 실패는 수정 전 커밋에서도 재현했습니다. `npm run build -- --local`은 통과했으며 운영 빌드는 Vercel 시스템 환경변수가 필요합니다. 실제 화면에서는 로그인 후 ‘기기 승인 요청’을 눌러 연결 미준비·미접수 안내가 나오는지 확인하세요. 승인 전에는 자료가 표시되거나 직접 API로 반환되어서는 안 됩니다. 실제 로그인·배포·승인된 기기의 접근·공식 심판은 이 수정에서 실행하지 않았습니다.
+
+
 ## 11단계 심판 실패 후 보호 경계 보완
 
 4209078 심판에서 S11_KEY_EXPOSED, S11_DATA_BEFORE_APPROVAL, S11_BADGE_IS_TRUST가 보고됐습니다. 공개 파일에서 개인키/JWT/서버 키 후보는 찾지 못했으며 실제 브라우저에 남은 기기 키나 심판의 키 분류 원인은 확인하지 못했습니다. 키 값은 기록하지 않습니다.
