@@ -28,6 +28,7 @@ export function deploymentIdentity(env, config) {
     judgeIssuer: config.judgeIssuer,
     ...(config.step >= 3 ? { allowedRoutes: config.allowedRoutes } : {}),
     ...(config.step >= 5 ? { originalApiUrl: config.originalApiUrl } : {}),
+    ...(config.step >= 10 ? { restoreRoute: config.restoreRoute ?? null } : {}),
     ...(config.step === 1 ? { sampleMarker: config.sampleMarker } : {}),
   };
 }

@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {deploymentIdentity} from '../scripts/deployment-identity.mjs';
 import {createNoteRestoreHandler,noteContentHash} from '../src/note-restore-handler.mjs';
 const A='00000000-0000-4000-8000-000000000001',B='00000000-0000-4000-8000-000000000002';
 const ID='00000000-0000-4000-8000-000000000022',OTHER='00000000-0000-4000-8000-000000000033';
-function fixture({missing=false,foreign=false,race=false,collision=false}={}) {
+function fixture({missing=false,foreign=false,race=false,collision=false,afterRead}={}) {
   const note={schema:'aleph.note-backup.v1',id:ID,ownerId:B,title:'B fixture',body:'synthetic recovery fixture'};
   note.contentSha256=noteContentHash(note);
   const raw=JSON.stringify(note);
@@ -23,7 +25,9 @@ function fixture({missing=false,foreign=false,race=false,collision=false}={}) {
         rows.push({...payload});found=[rows.at(-1)];writes++;
       }
       if(operation==='update') {found.forEach(row=>Object.assign(row,payload));writes+=found.length;}
-      const row=found[0];return {data:row?Object.fromEntries(columns.split(',').map(key=>[key,row[key]])):null,error:null};
+      const row=found[0];
+      if(operation==='read')afterRead?.(env);
+      return {data:row?Object.fromEntries(columns.split(',').map(key=>[key,row[key]])):null,error:null};
     };
     const query={select(v){columns=v;return query;},eq(k,v){filters.push([k,v]);return query;},
       update(v){operation='update';payload=v;return query;},insert(v){operation='insert';payload=v;return query;},
@@ -48,6 +52,27 @@ test('B restores exactly the designated memo with matching id, owner and hash wh
     assert.equal(restored.owner_id,B);assert.equal(noteContentHash(restored),f.note.contentSha256);
     assert.deepEqual(f.rows[0],other);assert.deepEqual(f.audit,audit);assert.equal(f.writes,1);
     assert.equal(Object.hasOwn(result.data,'body'),false);assert.equal(Object.hasOwn(result.data,'title'),false);
+  }
+});
+
+test('restore route is registered as the implemented POST path and included in deployment metadata',async()=>{
+  const config=JSON.parse(await readFile(new URL('../aleph.config.json',import.meta.url),'utf8'));
+  assert.equal(config.restoreRoute,'/api/restore-note');
+  assert.ok(config.allowedRoutes.includes(`POST ${config.restoreRoute}`));
+  const metadata=deploymentIdentity({VERCEL_GIT_PROVIDER:'github',VERCEL_GIT_REPO_OWNER:'jaehyun7849',
+    VERCEL_GIT_REPO_SLUG:'aleph-defense-starter',VERCEL_GIT_COMMIT_SHA:'a'.repeat(40),VERCEL_URL:'fixture.vercel.app'},config);
+  assert.equal(metadata.restoreRoute,config.restoreRoute);
+});
+
+test('backup or independent verification changed during lookup stops before any DB write',async()=>{
+  for(const missing of [false,true]) {
+    for(const mutate of [env=>{env.VAULT_NOTE_BACKUP+=' ';},
+      env=>{env.VAULT_NOTE_BACKUP_SHA256='0'.repeat(64);},
+      env=>{delete env.VAULT_NOTE_BACKUP;},env=>{delete env.VAULT_NOTE_BACKUP_SHA256;}]) {
+      const f=fixture({missing,afterRead:mutate}),before=structuredClone(f.rows),audit=structuredClone(f.audit);
+      assert.ok([422,503].includes((await f.call()).code));
+      assert.equal(f.writes,0);assert.deepEqual(f.rows,before);assert.deepEqual(f.audit,audit);
+    }
   }
 });
 test('A, no login, wrong id/owner/hash and client content cannot restore or write',async()=>{

@@ -23,5 +23,5 @@
     "DELETE /api/notices/:id"
   ],
   "originalApiUrl": "https://tajrdnlxsegeburwodnl.supabase.co/rest/v1/notes",
-  "restoreRoute": null
+  "restoreRoute": "/api/restore-note"
 }

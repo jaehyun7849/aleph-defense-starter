@@ -44,6 +44,12 @@ export function createNoteRestoreHandler({createClient,verifyLogin,env=process.e
       const meta=await db.from('notes').select('owner_id').eq('id',id).maybeSingle();
       if(meta.error)return deny(502,'restore_database_failed');
       if(meta.data&&meta.data.owner_id?.toLowerCase()!==backupOwner)return deny(403,'recovery_owner_forbidden');
+      // Re-read the private copy and independent pin after the asynchronous DB
+      // lookup. A changed or withdrawn verification must stop before any write.
+      const freshRaw=env.VAULT_NOTE_BACKUP, freshExpected=env.VAULT_NOTE_BACKUP_SHA256;
+      if(typeof freshRaw!=='string'||typeof freshExpected!=='string')return deny(503,'private_backup_missing');
+      if(freshRaw!==raw||freshExpected!==expected||hash(freshRaw)!==freshExpected)
+        return deny(422,'backup_integrity_failed');
       const content={title:note.title,body:note.body,content:note.body};
       // Never upsert: inserts must not overwrite an id acquired by another owner.
       const write=meta.data
