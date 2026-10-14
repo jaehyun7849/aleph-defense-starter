@@ -48,8 +48,34 @@ export function readDetectionEvents(events) {
 
 // A proposal is separate from decide() and never executes revocation.
 export function detect(events) {
+  const cleanEvents = readDetectionEvents(events);
+  // The supplied v1 contract has only at/method/identity. Its revocation
+  // proposal names the verified pseudonymous subject; it provides no device id.
+  // Do not invent network/device values or downgrade extension events to v1.
+  const extended = events.some(event => ['signals', 'deviceId', 'deviceRegistered']
+    .some(field => Object.hasOwn(event, field)));
+  if (!extended) {
+    const subjects = new Map();
+    for (const event of cleanEvents) {
+      if (event.method !== 'GET') continue;
+      const subject = event.identity.sub;
+      if (!subjects.has(subject)) subjects.set(subject, []);
+      subjects.get(subject).push(Date.parse(event.at));
+    }
+    for (const [subject, times] of subjects) {
+      times.sort((a, b) => a - b);
+      let left = 0;
+      for (let right = 0; right < times.length; right++) {
+        while (times[right] - times[left] > 600000) left++;
+        if (right - left + 1 > 120) return {
+          action: 'propose_revocation', reasonCode: 'burst_read', subject,
+        };
+      }
+    }
+    return { action: 'observe' };
+  }
   const groups = new Map();
-  for (const event of readDetectionEvents(events)) {
+  for (const event of cleanEvents) {
     if (event.method !== 'GET' || event.deviceRegistered !== true) continue;
     const key = JSON.stringify([event.identity.sub, event.deviceId]);
     if (!groups.has(key)) groups.set(key, []);

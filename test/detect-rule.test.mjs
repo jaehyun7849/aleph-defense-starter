@@ -43,3 +43,19 @@ test('proposal is single-device only; no source promotion or private-field copyi
   });
   assert.equal(readDetectionEvents(input)[0].signals.network, 'unusual');
 });
+
+test('v1 burst proposes only the provided subject and cannot be triggered by mixed or incomplete extension metadata', () => {
+  const original = events().map(({at,method,identity})=>({at,method,identity}));
+  assert.deepEqual(detect([...original].reverse()), {
+    action:'propose_revocation', reasonCode:'burst_read', subject:'learner_fixture',
+  });
+  const zeroNetworkProof = original.map(e=>({...e,signals:{source:'none'}}));
+  assert.deepEqual(detect(zeroNetworkProof), {action:'observe'});
+  assert.deepEqual(detect([...original,...events(1,0,{signals:{source:'judge_fixture',network:'usual'}})]), {action:'observe'});
+  assert.deepEqual(detect(original.map(e=>({...e,deviceRegistered:false}))), {action:'observe'});
+  const boundary = original.slice(0,120);
+  boundary.push({...original[120],at:'2026-10-01T00:10:00.000Z'});
+  assert.equal(detect(boundary).action,'propose_revocation');
+  boundary[120].at = '2026-10-01T00:10:00.001Z';
+  assert.equal(detect(boundary).action,'observe');
+});

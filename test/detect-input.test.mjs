@@ -5,14 +5,16 @@ import { detect, readDetectionEvents } from '../src/detect.mjs';
 const event = () => ({ at: '2026-10-01T00:00:00.000Z', method: 'GET',
   identity: { sub: 'learner_fixture' } });
 
-test('normal and suspicious teaching events can be read without changing detection decisions', () => {
+test('provided teaching events are read without secrets and use the v1 detection contract', () => {
   for (const count of [30, 200]) {
     const events = Array.from({ length: count }, (_, index) => ({ ...event(),
       at: new Date(Date.UTC(2026, 9, 1) + index * 2000).toISOString() }));
     const result = readDetectionEvents(events);
     assert.equal(result.length, count);
     assert.deepEqual(result[0], event());
-    assert.deepEqual(detect(events), { action: 'observe' });
+    assert.deepEqual(detect(events), count > 120
+      ? { action: 'propose_revocation', reasonCode: 'burst_read', subject: 'learner_fixture' }
+      : { action: 'observe' });
   }
   assert.deepEqual(readDetectionEvents([]), []);
   assert.equal(readDetectionEvents([{ ...event(), at: '2026-10-01T00:00:00Z' }])[0].at,

@@ -34,8 +34,22 @@ const cases = [
   { name: '등록 확인 없는 기기는 회수 제안 없음', events: reads(200, { network: 'unusual' }).map(e => ({...e, deviceRegistered: false})), expected: { action: 'observe' } },
   { name: '기기별 100건은 합산하지 않음', events: [...reads(100, { network: 'unusual' }),
     ...reads(100, { network: 'unusual', device: 'bbbbbbbbbbbbbbbb' })], expected: { action: 'observe' } },
-  { name: '네트워크·기기 정보 없는 기존 사건은 유지', events: reads(200).map(({at,method,identity}) => ({at,method,identity})), expected: { action: 'observe' } },
+  { name: '제공 v1 폭주 200건 → 계약의 회수 제안', events: reads(200).map(({at,method,identity}) => ({at,method,identity})), expected: {
+    action: 'propose_revocation', reasonCode: 'burst_read', subject } },
 ];
+
+// Original provided v1 checks alongside the separate local extension checks.
+const legacy = options => reads(options.count, options).map(({at, method, identity}) => ({at, method, identity}));
+cases.push(
+  { name: '제공 v1 정상 30건', events: legacy({count:30}), expected: {action:'observe'} },
+  { name: '제공 v1 경계 120건', events: legacy({count:120}), expected: {action:'observe'} },
+  { name: '제공 v1 121건 → 계약의 회수 제안', events: legacy({count:121}), expected: {
+    action:'propose_revocation', reasonCode:'burst_read', subject } },
+  { name: '제공 v1 다른 사용자 각 100건은 유지', events: [...legacy({count:100}),
+    ...legacy({count:100,owner:'other_fixture'})], expected: {action:'observe'} },
+  { name: '제공 v1 10분 밖으로 분산된 200건은 유지', events: legacy({count:200,intervalSeconds:7}), expected: {action:'observe'} },
+  { name: '제공 v1 조회 이외 요청은 집계하지 않음', events: legacy({count:200}).map(e=>({...e,method:'PUT'})), expected: {action:'observe'} },
+);
 
 // This is a practice contract, not a live engine assertion or judge score.
 export async function checkDetection(detect) {
@@ -54,7 +68,7 @@ if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(f
     const { detect } = await import('../src/detect.mjs');
     const results = await checkDetection(detect);
     for (const item of results) process.stdout.write(`${item.passed ? '통과' : '확인 필요'} · ${item.name}\n`);
-    process.stdout.write('로컬 확장 가상 사건의 제안만 시험했습니다. 실제 회수·시간·심판 통과는 미확인입니다.\n');
+    process.stdout.write('제공 v1 계약과 로컬 확장을 별도로 시험했습니다. 실제 회수·시간·심판 통과는 미확인입니다.\n');
     if (results.some(item => !item.passed)) process.exitCode = 1;
   } catch (error) {
     process.stderr.write(`탐지 연습 첫 오류: ${error.message}\n`);
