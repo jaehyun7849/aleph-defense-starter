@@ -39,10 +39,10 @@ async function runProtectionChecks(config) {
     throw new Error('설정의 실제 Vercel 운영 주소를 확인하세요.');
   }
   const attempts = [];
-  async function check(attackId, path, expected, accepts, authorization) {
+  async function check(attackId, path, expected, accepts, authorization, method = 'GET') {
     try {
       const response = await fetch(new URL(path, app), {
-        redirect: 'error',
+        method, redirect: 'error',
         signal: AbortSignal.timeout(10000),
         headers: authorization ? { Authorization: authorization } : {},
       });
@@ -65,6 +65,12 @@ async function runProtectionChecks(config) {
     '무로그인 목록 요청은 401 또는 403 JSON 오류로 거부', denied);
   await check('anonymous_note_item', '/api/notes/00000000-0000-4000-8000-000000000001',
     '무로그인 개별 메모 요청은 401 또는 403 JSON 오류로 거부', denied);
+  if (config.step >= 10) {
+    await check('anonymous_note_restore', '/api/restore-note',
+      '무로그인 복구 POST는 401 JSON 오류로 거부',
+      (response, data) => response.status === 401 && data?.reasonCode === 'login_required',
+      undefined, 'POST');
+  }
   await check('invalid_login_token', '/api/notes',
     '유효하지 않은 로그인 토큰은 JSON 오류로 거부', denied, 'Bearer invalid');
   await check('static_notes_removed', '/data.json',

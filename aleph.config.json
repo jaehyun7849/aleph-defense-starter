@@ -1,5 +1,5 @@
 {
-  "step": 9,
+  "step": 10,
   "repoUrl": "https://github.com/jaehyun7849/aleph-defense-starter",
   "publicAppUrl": "https://choi-bujang-secret-vault-2-pi.vercel.app/",
   "sampleMarker": "SAMPLE_NOTE_1",
@@ -10,6 +10,7 @@
     "audience": "authenticated"
   },
   "allowedRoutes": [
+    "POST /api/restore-note",
     "GET /api/notes",
     "POST /api/notes",
     "GET /api/notes/:id",
