@@ -65,7 +65,8 @@ test('가짜 decide 가 result.json 형식과 건수를 만듭니다', async () 
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     const code = await new Promise((resolvePromise, reject) => {
       child.on('error', reject);
-      child.on('exit', resolvePromise);
+      // Wait for stdio to drain as well as process exit before checking stderr.
+      child.on('close', resolvePromise);
     });
     assert.equal(code, 0);
     assert.deepEqual(stderr.trim().split(/\r?\n/), ['형식 오류: a-bad', '형식 오류: a-throw']);
