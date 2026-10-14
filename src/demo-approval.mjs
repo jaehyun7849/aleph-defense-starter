@@ -3,9 +3,6 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const STATES = new Set(['pending', 'approved', 'revoked']);
-export const DEMO_NOTES = Object.freeze([
-  { id: 'demo-1', title: '서버 승인 후 열린 데모 메모', body: '이 자료는 가상 데이터입니다. 실제 메모에는 접근하지 않습니다.' },
-]);
 const digest = token => createHash('sha256').update(token).digest('hex');
 const publicRecord = row => ({ requestId: row.id, state: row.state, createdAt: row.created_at });
 
@@ -18,9 +15,9 @@ export function createDemoHandler({ verifyLogin, getStore, env = process.env }) 
     const fail = (code, reasonCode, error) => res.status(code).json({ demo: true, error, reasonCode });
     let url;
     try { url = new URL(req.url, 'https://local.invalid'); } catch { return fail(404, 'invalid_route', '허용된 데모 경로가 아닙니다.'); }
-    if (url.search || !['/api/demo-device', '/api/demo-notes'].includes(url.pathname))
+    if (url.search || url.pathname !== '/api/demo-device')
       return fail(404, 'invalid_route', '허용된 데모 경로가 아닙니다.');
-    if (!(url.pathname === '/api/demo-device' ? ['GET', 'POST'] : ['GET']).includes(req.method))
+    if (!['GET', 'POST'].includes(req.method))
       return fail(405, 'method_not_allowed', '지원하지 않는 요청입니다.');
     if (!req.headers.authorization) return fail(401, 'login_required', '데모를 사용하려면 로그인하세요.');
     let actor;
@@ -49,11 +46,6 @@ export function createDemoHandler({ verifyLogin, getStore, env = process.env }) 
           return fail(400, 'invalid_body', '승인 요청 번호를 확인하세요.');
       }
       const store = await getStore();
-      if (url.pathname === '/api/demo-notes') {
-        const row = await readSession(store);
-        if (!row || row.state !== 'approved') return fail(403, 'demo_not_approved', '서버 승인 전에는 데모 자료를 열 수 없습니다.');
-        return res.status(200).json({ demo: true, notes: DEMO_NOTES });
-      }
       if (req.method === 'GET') {
         const row = await readSession(store);
         return res.status(200).json({ demo: true, state: row && STATES.has(row.state) ? row.state : 'unregistered',
