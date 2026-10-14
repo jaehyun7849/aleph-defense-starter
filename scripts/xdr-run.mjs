@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -58,7 +59,16 @@ export async function runXdr({ root, moduleKey, writeError = (line) => console.e
   return result;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+export function isMainModule(entryPath, moduleUrl) {
+  if (!entryPath) return false;
+  try {
+    const entry = realpathSync(resolve(entryPath));
+    const module = realpathSync(fileURLToPath(moduleUrl));
+    return process.platform === 'win32' ? entry.toLowerCase() === module.toLowerCase() : entry === module;
+  } catch { return false; }
+}
+
+const isMain = isMainModule(process.argv[1], import.meta.url);
 if (isMain) {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   try {

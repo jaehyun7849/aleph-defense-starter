@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "functions": [
+    "api/ai.js",
+    "api/auth.js",
+    "api/demo-device.js",
+    "api/device-approval.js",
+    "api/notes.js",
+    "api/notes/[id].js",
+    "api/notices.js",
+    "api/notices/[id].js",
+    "api/restore-note.js",
+    "api/threat-intel.js"
+  ]
+}
