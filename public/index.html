@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BYTE BACK | 자료실</title>
+  <title>BYTE BACK 내 자료실</title>
+  <meta name="theme-color" content="#101a28">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="/icons/app-192.png">
+  <link rel="apple-touch-icon" href="/icons/app-192.png">
   <style>
     :root {
       color-scheme: dark;
@@ -57,7 +61,7 @@
 </head>
 <body>
   <main>
-    <h1>자료실</h1>
+    <h1>BYTE BACK 내 자료실</h1>
     <p>실습을 위해 만든 가상 메모를 사용하는 자료실입니다.</p>
 
     <div class="notice">
@@ -66,6 +70,17 @@
     </div>
 
     <p id="status" role="status">로그인 상태를 확인하는 중입니다.</p>
+    <section class="notice" aria-label="앱과 기기 상태">
+      <p id="device-status" role="status">기기 승인: 확인 정보 없음</p>
+      <p>서버가 이 기기의 등록 상태를 확인한 뒤 자료실이 열립니다. 앱 설치나 로그인만으로 기기 승인이 완료되지는 않습니다.</p>
+      <div id="device-actions" class="actions" hidden>
+        <button id="device-request" type="button">기기 승인 요청</button>
+        <button id="device-refresh" type="button">승인 결과 확인</button>
+      </div>
+      <p id="connection-status" role="status">연결 상태를 확인하는 중입니다.</p>
+      <p id="offline-capability">오프라인에서는 연결 안내만 제공합니다. 메모 조회와 변경에는 인터넷 연결과 서버 확인이 필요합니다.</p>
+      <p>지원하는 브라우저의 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택할 수 있습니다.</p>
+    </section>
 
     <form id="login-form" hidden>
       <label>
@@ -102,7 +117,9 @@
     <ul id="notes" aria-live="polite" hidden></ul>
   </main>
 
+  <script type="module" src="/app-status.js"></script>
   <script type="module">
+    import { createDeviceApproval } from '/device-approval.js';
     const status = document.querySelector('#status');
     const form = document.querySelector('#login-form');
     const loginButton = document.querySelector('#login-button');
@@ -118,6 +135,20 @@
     let currentSession = null;
     let editingId = null;
     let viewVersion = 0;
+    let deviceApproval;
+    let deviceVerified = false;
+    const deviceActions = document.querySelector('#device-actions');
+    const deviceRequest = document.querySelector('#device-request');
+    const deviceRefresh = document.querySelector('#device-refresh');
+
+    function setDeviceAccess(approved) {
+      const allowed = approved === true && Boolean(currentSession);
+      if (!allowed || allowed !== deviceVerified) ++viewVersion;
+      deviceVerified = allowed;
+      list.hidden = !allowed;
+      noteForm.hidden = !allowed;
+      if (!allowed) { list.replaceChildren(); resetEditor(); }
+    }
 
     function showListMessage(text) {
       const item = document.createElement('li');
@@ -135,10 +166,26 @@
     try {
       const { createBrowserAuth } = await import('/auth-client.js');
       const supabase = { auth: createBrowserAuth() };
+      deviceApproval = createDeviceApproval({ getSession: () => supabase.auth.getSession(),
+        status: document.querySelector('#device-status'), onAccessChange: setDeviceAccess });
+
+      for (const [button, action] of [[deviceRequest, 'requestApproval'], [deviceRefresh, 'check']]) {
+        button.addEventListener('click', async () => {
+          deviceRequest.disabled = deviceRefresh.disabled = true;
+          try { if (await deviceApproval[action]()) await loadNotes(); }
+          finally { deviceRequest.disabled = deviceRefresh.disabled = false; }
+        });
+      }
+      window.addEventListener('offline', () => deviceApproval.invalidate(
+        '기기 승인: 오프라인으로 확인할 수 없습니다. 자료실이 잠겨 있습니다.'));
 
       async function request(path, method = 'GET', payload) {
         const { data, error } = await supabase.auth.getSession();
         if (error || !data.session) throw new Error('다시 로그인해 주세요.');
+        if (!await deviceApproval.check()) throw new Error('기기 등록 확인 전에는 자료를 요청할 수 없습니다.');
+        const account = data.session.user.id;
+        if (!currentSession || currentSession.user.id !== account || !deviceVerified)
+          throw new Error('로그인과 기기 상태를 다시 확인해 주세요.');
         const response = await fetch(path, {
           method,
           cache: 'no-store',
@@ -151,6 +198,8 @@
         if (response.status === 204) return null;
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || '요청에 실패했습니다.');
+        if (!deviceVerified || currentSession?.user.id !== account)
+          throw new Error('기기 상태가 변경되어 자료를 표시하지 않습니다.');
         return result;
       }
 
@@ -205,7 +254,7 @@
 
       async function loadNotes() {
         const version = ++viewVersion;
-        if (!currentSession) return;
+        if (!currentSession || !deviceVerified) return;
         showListMessage('내 메모를 불러오는 중입니다.');
         try {
           const notes = await request('/api/notes');
@@ -224,12 +273,12 @@
       supabase.auth.onAuthStateChange((_event, session) => {
         const accountChanged = currentSession?.user.id !== session?.user.id;
         currentSession = session;
+        deviceApproval.invalidate();
         ++viewVersion;
         const loggedIn = Boolean(session);
         form.hidden = loggedIn;
         logoutButton.hidden = !loggedIn;
-        list.hidden = !loggedIn;
-        noteForm.hidden = !loggedIn;
+        deviceActions.hidden = !loggedIn;
         status.textContent = loggedIn
           ? `${session.user.email || '사용자'} 계정으로 로그인했습니다.`
           : '로그인하지 않았습니다. 로그인해 주세요.';
@@ -239,7 +288,9 @@
           list.replaceChildren();
         }
         // SDK 이벤트 처리가 끝난 뒤 세션과 메모를 읽습니다.
-        if (loggedIn) setTimeout(() => { void loadNotes(); }, 0);
+        if (loggedIn) setTimeout(async () => {
+          if (await deviceApproval.check()) await loadNotes();
+        }, 0);
       });
 
       form.addEventListener('submit', async event => {

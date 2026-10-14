@@ -47,7 +47,7 @@ async function runProtectionChecks(config) {
         headers: authorization ? { Authorization: authorization } : {},
       });
       let data = null;
-      if (response.headers.get('content-type')?.includes('application/json')) {
+      if (/^application\/(?:json|[a-z0-9.+-]+\+json)(?:;|$)/i.test(response.headers.get('content-type') ?? '')) {
         try { data = await response.json(); } catch {}
       }
       const success = accepts(response, data);
@@ -70,6 +70,19 @@ async function runProtectionChecks(config) {
       '무로그인 복구 POST는 401 JSON 오류로 거부',
       (response, data) => response.status === 401 && data?.reasonCode === 'login_required',
       undefined, 'POST');
+  }
+  if (config.step >= 11) {
+    await check('webapp_manifest', '/manifest.webmanifest',
+      'manifest의 앱 이름·시작 주소·설치 표시·아이콘이 설정됨',
+      (response, data) => response.ok && data?.name === 'BYTE BACK 내 자료실'
+        && data.start_url === '/' && data.display === 'standalone'
+        && Array.isArray(data.icons) && ['192x192', '512x512'].every(size => data.icons.some(icon => icon.sizes === size)));
+    for (const method of ['GET', 'POST']) {
+      await check('anonymous_device_' + method.toLowerCase(), '/api/device-approval',
+        '무로그인 기기 승인 요청/조회는 401 JSON 오류이고 등록 상태가 false',
+        (response, data) => response.status === 401 && data?.reasonCode === 'login_required'
+          && data.deviceRegistered === false, undefined, method);
+    }
   }
   await check('invalid_login_token', '/api/notes',
     '유효하지 않은 로그인 토큰은 JSON 오류로 거부', denied, 'Bearer invalid');
