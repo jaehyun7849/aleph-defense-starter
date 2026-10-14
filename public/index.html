@@ -119,7 +119,7 @@
 
   <script type="module" src="/app-status.js"></script>
   <script type="module">
-    import { createDeviceApproval, createSignedHeaders } from '/device-approval.js';
+    import { createDeviceApproval } from '/device-approval.js';
     const status = document.querySelector('#status');
     const form = document.querySelector('#login-form');
     const loginButton = document.querySelector('#login-button');
@@ -186,13 +186,11 @@
         const account = data.session.user.id;
         if (!currentSession || currentSession.user.id !== account || !deviceVerified)
           throw new Error('로그인과 기기 상태를 다시 확인해 주세요.');
-       const signedHeaders = await createSignedHeaders(method, path, account);
         const response = await fetch(path, {
           method,
           cache: 'no-store',
           headers: {
             Authorization: `Bearer ${data.session.access_token}`,
-            ...signedHeaders,
             ...(payload ? { 'Content-Type': 'application/json' } : {})
           },
           ...(payload ? { body: JSON.stringify(payload) } : {})
