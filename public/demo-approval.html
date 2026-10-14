@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>기기 승인 데모 · BYTE BACK</title>
+  <title>관리자 승인 · BYTE BACK</title>
   <style>
     :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101a28;color:#ecf4ff}
     main{max-width:760px;margin:auto;padding:32px 20px}p{line-height:1.7;color:#bfd0e5}
@@ -14,9 +14,9 @@
 </head>
 <body><main>
   <a href="/">기존 자료실로 돌아가기</a>
-  <h1>서버 승인 흐름 데모</h1>
-  <p>가상 접속과 가상 메모로 승인 과정을 체험합니다. 실제 기기 인증이나 실제 자료실 승인을 대신하지 않습니다.</p>
-  <p>앱 설치는 승인과 무관합니다. 새로고침하면 새로운 데모 접속으로 다시 요청해야 합니다.</p>
+  <h1>자료실 접속 관리자 승인</h1>
+  <p>기존 자료실에서 접수한 요청을 관리자가 승인하는 화면입니다. 현재 승인은 데모 접속 승인으로, 실제 하드웨어 기기 인증을 대신하지 않습니다.</p>
+  <p>먼저 기존 자료실에서 로그인하고 기기 승인 요청을 누르세요. 이 화면은 별도 창에서 열어 관리자 계정으로 로그인하세요.</p>
   <p id="login-status" role="status">로그인 상태 확인 중</p>
   <form id="demo-login">
     <label>이메일<input id="demo-email" type="email" autocomplete="username" required></label>
@@ -25,13 +25,6 @@
   </form>
   <button id="demo-logout" hidden>로그아웃</button>
   <p id="demo-message" role="alert"></p>
-  <section id="demo-controls" hidden>
-    <h2>이 데모 접속</h2><p id="demo-state" role="status">데모 승인: 요청 전</p>
-    <p id="demo-request-id"></p>
-    <div class="actions"><button id="demo-request">기기 승인 요청</button><button id="demo-refresh">승인 결과 확인</button></div>
-    <p>요청 버튼은 대기 상태만 만듭니다. 관리자가 승인한 뒤 결과를 다시 확인하세요.</p>
-  </section>
-  <section id="demo-data" hidden><h2>승인된 접속의 가상 자료실</h2><ul id="demo-notes"></ul></section>
   <section id="demo-admin" hidden>
     <h2>관리자 승인</h2><p>서버에 관리자 계정으로 등록된 사용자만 목록을 보고 승인·취소할 수 있습니다.</p>
     <button id="demo-admin-list">관리자 승인 목록 확인</button><ul id="demo-requests"></ul>

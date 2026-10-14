@@ -1,13 +1,14 @@
 # 현재 구현: 11단계 — 나만의 접속 앱을 완성합니다 (실제 기기 승인 미연결)
 
-## 서버 승인 데모
+## 기존 자료실에 연결한 승인 데모
 
-기존 자료실 첫 화면의 **가상 자료로 서버 승인 데모 체험하기** 링크에서 `/demo-approval.html`을 엽니다. 요청 버튼은 대기만 만들고, 서버 설정에 등록된 관리자 계정의 별도 승인 뒤에 상태를 다시 확인해야 가상 자료가 열립니다. 데모 승인은 실제 자료실 접근에 사용하지 않습니다.
+기존 로그인·기기 승인 요청·승인 결과 확인 버튼에서 데모 승인 흐름을 사용합니다. 관리자 승인 후 기존 메모 조회/추가/수정/삭제를 실행하며 자료 API도 매번 서버 승인 기록과 기존 권한을 검사합니다. 별도 가상 자료실과 첫 화면의 데모 이동 링크는 제거했습니다.
 
-배포 전 Supabase 데모 테이블 생성과 Vercel 관리자 UID 설정이 필요합니다. 자세한 실행 순서와 API 계약은 [docs/DEMO_APPROVAL.md](docs/DEMO_APPROVAL.md), 실행할 SQL은 [docs/DEMO_APPROVAL.sql](docs/DEMO_APPROVAL.sql)에 있습니다. 실제 DB 설정·배포·계정 로그인은 이 구현에서 실행하지 않았습니다.
+관리자 화면은 운영 주소의 /demo-approval.html을 별도 창에서 엽니다. 이전에 만든 데모 테이블과 DEMO_APPROVAL_ADMIN_IDS 설정을 그대로 사용합니다. [설정 및 체험 순서](docs/DEMO_APPROVAL.md)를 참고하세요. 실제 하드웨어 기기 인증은 미연결이며 실제 배포·로그인·DB 통합 검증은 미실행입니다.
 
-검사: `node --test test/demo-approval.test.mjs test/demo-device-client.test.mjs`.
+검사: node --test test/vault-demo-integration.test.mjs test/demo-approval.test.mjs test/demo-device-client.test.mjs
 
+> 아래는 이전 구현과 당시 검사 기록입니다. 현재 동작과 설정 방법은 위의 기존 자료실 승인 데모 설명을 따릅니다. 이전 기록의 전체 차단·연결 미준비 설명은 현재 데모 승인 후 접근 동작을 설명하지 않습니다.
 
 ## 승인 연결 회귀 수정 (2026-10-14)
 

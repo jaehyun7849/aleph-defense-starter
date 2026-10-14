@@ -62,7 +62,6 @@
 <body>
   <main>
     <h1>BYTE BACK 내 자료실</h1>
-    <p><a href="/demo-approval.html">가상 자료로 서버 승인 데모 체험하기</a></p>
     <p>실습을 위해 만든 가상 메모를 사용하는 자료실입니다.</p>
 
     <div class="notice">
@@ -73,7 +72,7 @@
     <p id="status" role="status">로그인 상태를 확인하는 중입니다.</p>
     <section class="notice" aria-label="앱과 기기 상태">
       <p id="device-status" role="status">기기 승인: 확인 정보 없음</p>
-      <p>서버가 이 기기의 등록 상태를 확인한 뒤 자료실이 열립니다. 앱 설치나 로그인만으로 기기 승인이 완료되지는 않습니다.</p>
+      <p>현재 데모에서는 관리자가 이 페이지 접속을 승인하고 서버가 결과를 확인한 뒤 기존 자료실이 열립니다. 앱 설치나 로그인만으로 기기 승인이 완료되지는 않습니다.</p>
       <div id="device-actions" class="actions" hidden>
         <button id="device-request" type="button">기기 승인 요청</button>
         <button id="device-refresh" type="button">승인 결과 확인</button>
@@ -187,18 +186,7 @@
         const account = data.session.user.id;
         if (!currentSession || currentSession.user.id !== account || !deviceVerified)
           throw new Error('로그인과 기기 상태를 다시 확인해 주세요.');
-        const response = await fetch(path, {
-          method,
-          cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${data.session.access_token}`,
-            ...(payload ? { 'Content-Type': 'application/json' } : {})
-          },
-          ...(payload ? { body: JSON.stringify(payload) } : {})
-        });
-        if (response.status === 204) return null;
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || '요청에 실패했습니다.');
+        const result = await deviceApproval.call(path, method, payload);
         if (!deviceVerified || currentSession?.user.id !== account)
           throw new Error('기기 상태가 변경되어 자료를 표시하지 않습니다.');
         return result;
@@ -274,7 +262,7 @@
       supabase.auth.onAuthStateChange((_event, session) => {
         const accountChanged = currentSession?.user.id !== session?.user.id;
         currentSession = session;
-        deviceApproval.invalidate();
+        if (accountChanged || !session) deviceApproval.invalidate();
         ++viewVersion;
         const loggedIn = Boolean(session);
         form.hidden = loggedIn;

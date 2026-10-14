@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoHandler } from '../src/demo-approval.mjs';
 import { createDemoStore } from '../src/demo-approval-store.mjs';
+import { createDemoVerifier } from '../src/demo-runtime.mjs';
+import { protectDeviceRequests } from '../src/protected-device-handler.mjs';
 import { readFile } from 'node:fs/promises';
 
 const A = '00000000-0000-4000-8000-000000000001';
@@ -24,28 +26,31 @@ function fixture() {
     return userId ? { kind: 'student', userId } : null;
   }, getStore: async () => store, env: { DEMO_APPROVAL_ADMIN_IDS: ADMIN } };
   const handler = createDemoHandler(options);
+  const dataHandler = protectDeviceRequests({ config: { step: 11 }, verifyLogin: options.verifyLogin,
+    verifyDemoAccess: createDemoVerifier(options), handler: async (_req, res) => res.status(200).json({ notes: [{ id: 'existing-note' }] }) });
   async function send({ actor = 'a', path = '/api/demo-device', method = 'GET', body, token, headers = {}, using = handler } = {}) {
     const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } };
-    await using({ url: path, method, body, headers: { authorization: actor, ...(token ? { 'x-demo-session': token } : {}), ...headers } }, res);
+    const target = path === '/api/notes' ? dataHandler : using;
+    await target({ url: path, method, body, headers: { authorization: actor, ...(token ? { 'x-demo-session': token } : {}), ...headers } }, res);
     return res;
   }
   return { rows, store, options, send };
 }
-test('server approval is separate from request, survives handler recreation and gates dummy data', async () => {
+test('server approval is separate from request, survives handler recreation and gates existing data', async () => {
   const f = fixture();
-  assert.equal((await f.send({ path: '/api/demo-notes' })).code, 403);
+  assert.equal((await f.send({ path: '/api/notes' })).code, 403);
   const request = await f.send({ method: 'POST', body: { action: 'request' } });
   assert.equal(request.code, 201); assert.equal(request.data.state, 'pending');
   const token = request.data.sessionToken;
   assert.equal((await f.send({ token })).data.state, 'pending');
-  assert.equal((await f.send({ token, path: '/api/demo-notes', headers: { 'x-app-installed': 'true', 'x-device-registered': 'true' } })).code, 403);
+  assert.equal((await f.send({ token, path: '/api/notes', headers: { 'x-app-installed': 'true', 'x-device-registered': 'true' } })).code, 403);
   const repeat = await f.send({ method: 'POST', token, body: { action: 'request' } });
   assert.equal(repeat.data.state, 'pending'); assert.equal('sessionToken' in repeat.data, false);
   assert.equal((await f.send({ actor: 'admin', method: 'POST', body: { action: 'approve', requestId: request.data.requestId } })).code, 200);
   const otherInstance = createDemoHandler(f.options);
   assert.equal((await f.send({ token, using: otherInstance })).data.state, 'approved');
-  const data = await f.send({ path: '/api/demo-notes', token, using: otherInstance });
-  assert.equal(data.code, 200); assert.equal(data.data.demo, true); assert.equal(data.data.notes.length, 1);
+  const data = await f.send({ path: '/api/notes', token, using: otherInstance });
+  assert.equal(data.code, 200); assert.equal(data.data.notes.length, 1);
   const list = await f.send({ actor: 'admin', method: 'POST', body: { action: 'list' } });
   assert.equal('session_hash' in list.data.requests[0], false);
   assert.equal('owner_user_id' in list.data.requests[0], false);
@@ -63,10 +68,10 @@ test('non-admin cannot list, approve or revoke; forged state and identity fields
 test('approved demo is bound to account and session; new page and revocation deny access', async () => {
   const f = fixture(); const request = await f.send({ method: 'POST', body: { action: 'request' } });
   await f.send({ actor: 'admin', method: 'POST', body: { action: 'approve', requestId: request.data.requestId } });
-  assert.equal((await f.send({ actor: 'b', token: request.data.sessionToken, path: '/api/demo-notes' })).code, 403);
-  assert.equal((await f.send({ path: '/api/demo-notes' })).code, 403);
+  assert.equal((await f.send({ actor: 'b', token: request.data.sessionToken, path: '/api/notes' })).code, 403);
+  assert.equal((await f.send({ path: '/api/notes' })).code, 403);
   await f.send({ actor: 'admin', method: 'POST', body: { action: 'revoke', requestId: request.data.requestId } });
-  assert.equal((await f.send({ token: request.data.sessionToken, path: '/api/demo-notes' })).code, 403);
+  assert.equal((await f.send({ token: request.data.sessionToken, path: '/api/notes' })).code, 403);
   const next = await f.send({ method: 'POST', body: { action: 'request' } });
   assert.equal(next.data.state, 'pending'); assert.notEqual(next.data.requestId, request.data.requestId);
   assert.equal((await f.send({ actor: 'admin', method: 'POST', body: { action: 'approve', requestId: request.data.requestId } })).code, 409);
@@ -76,10 +81,10 @@ test('invalid login/routes and unavailable storage never return dummy data', asy
   const f = fixture();
   assert.equal((await f.send({ actor: undefined, headers: { authorization: undefined } })).code, 401);
   assert.equal((await f.send({ actor: 'invalid' })).code, 401);
-  for (const path of ['/api/notes', '/api/demo-notes?approved=true']) assert.equal((await f.send({ path })).code, 404);
+  for (const path of ['/api/unknown', '/api/demo-device?approved=true']) assert.equal((await f.send({ path })).code, 404);
   assert.equal((await f.send({ method: 'DELETE' })).code, 405);
   const broken = createDemoHandler({ ...f.options, getStore: async () => { throw new Error('private detail'); } });
-  const response = await f.send({ using: broken, path: '/api/demo-notes' });
+  const response = await f.send({ using: broken });
   assert.equal(response.code, 503); assert.equal('notes' in response.data, false); assert.doesNotMatch(JSON.stringify(response.data), /private detail/);
 });
 test('missing administrator configuration fails before creating an unapprovable request', async () => {

@@ -38,7 +38,8 @@ test('connectivity and installation events cannot promote the unknown device sta
   const html = await source('index.html');
   assert.match(html, /rel="manifest" href="\/manifest.webmanifest"/);
   assert.match(html, /앱 설치나 로그인만으로 기기 승인이 완료되지는 않습니다/);
-  assert.match(html, /cache: 'no-store'/);
+  // Requests now go through the shared client used by the existing vault.
+  assert.match(await source('demo-device-client.js'), /cache: 'no-store'/);
 });
 
 async function worker() {

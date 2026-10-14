@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createContext, runInContext } from 'node:vm';
 import { createDeviceApprovalHandler } from '../src/device-approval-handler.mjs';
 const source = name => readFile(new URL('../public/' + name, import.meta.url), 'utf8');
-const approved = { schema: 'aleph.device-approval.v1', state: 'approved', deviceRegistered: true, deviceId: 'aaaaaaaaaaaaaaaa' };
+const approved = { demo: true, schema: 'aleph.device-approval.v1', state: 'approved', deviceRegistered: true, deviceId: 'aaaaaaaaaaaaaaaa' };
 const login = { user: { id: 'fixture-a' }, access_token: 'fixture-session' };
 
 test('unconnected server never approves or queues a device, including forged body/header claims', async () => {
@@ -20,7 +20,7 @@ test('unconnected server never approves or queues a device, including forged bod
 
 async function harness() {
   let session = login;
-  let responseData = { schema: 'aleph.device-approval.v1', state: 'pending', deviceRegistered: false };
+  let responseData = { demo: true, schema: 'aleph.device-approval.v1', state: 'pending', deviceRegistered: false };
   let responseStatus = 200, networkFails = false, suspended;
   const requests = [], access = [], status = { textContent: '' };
   const context = createContext({ AbortSignal,
@@ -31,7 +31,8 @@ async function harness() {
       return { ok: responseStatus === 200, status: responseStatus, json: async () => responseData };
     },
   });
-  runInContext((await source('device-approval.js')).replace('export function ', 'function '), context);
+  runInContext((await source('demo-device-client.js')).replace('export function ', 'function '), context);
+  runInContext((await source('device-approval.js')).replace(/^import.*$/m, '').replace('export function ', 'function '), context);
   const gate = context.createDeviceApproval({ getSession: async () => ({ data: { session }, error: null }),
     onAccessChange: value => access.push(value), status });
   return { gate, requests, access, status, context,

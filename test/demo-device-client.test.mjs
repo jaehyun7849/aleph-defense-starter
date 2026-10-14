@@ -51,3 +51,23 @@ test('approved label without a demo session handle cannot mark the page approved
   assert.equal(await h.gate.check(), false);
   assert.equal(h.events.some(e => e.state === 'approved'), false);
 });
+test('old delayed check cannot overwrite a newer approved result', async () => {
+  const h = harness(); await h.gate.requestApproval(); h.reply('approved');
+  let resolve; h.suspend(new Promise(done => { resolve = done; }));
+  const old = h.gate.check(); await new Promise(done => setImmediate(done));
+  h.suspend(undefined);
+  assert.equal(await h.gate.check(), true); resolve();
+  assert.equal(await old, false); assert.equal(h.events.at(-1).state, 'approved');
+});
+test('data denial after approval emits a locked state', async () => {
+  const events = []; let denied = false;
+  const gate = createDemoAccess({ getSession: async () => ({ data: { session: { user: { id: 'fixture-a' }, access_token: 'fixture-login' } } }),
+    onState: e => events.push(e), fetcher: async (path, options) => ({
+      ok: !denied, status: denied ? 403 : 200,
+      json: async () => denied ? { reasonCode: 'demo_not_approved', error: 'revoked' }
+        : { demo: true, state: 'approved', ...(options.method === 'POST' ? { sessionToken: 'a'.repeat(43) } : {}) },
+    }) });
+  assert.equal(await gate.requestApproval(), true); denied = true;
+  await assert.rejects(() => gate.call('/api/notes'), /revoked/);
+  assert.equal(events.at(-1).state, 'error');
+});
