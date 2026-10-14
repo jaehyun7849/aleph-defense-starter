@@ -1,5 +1,14 @@
 # 현재 구현: 11단계 — 나만의 접속 앱을 완성합니다 (실제 기기 승인 미연결)
 
+## 서버 승인 데모
+
+기존 자료실 첫 화면의 **가상 자료로 서버 승인 데모 체험하기** 링크에서 `/demo-approval.html`을 엽니다. 요청 버튼은 대기만 만들고, 서버 설정에 등록된 관리자 계정의 별도 승인 뒤에 상태를 다시 확인해야 가상 자료가 열립니다. 데모 승인은 실제 자료실 접근에 사용하지 않습니다.
+
+배포 전 Supabase 데모 테이블 생성과 Vercel 관리자 UID 설정이 필요합니다. 자세한 실행 순서와 API 계약은 [docs/DEMO_APPROVAL.md](docs/DEMO_APPROVAL.md), 실행할 SQL은 [docs/DEMO_APPROVAL.sql](docs/DEMO_APPROVAL.sql)에 있습니다. 실제 DB 설정·배포·계정 로그인은 이 구현에서 실행하지 않았습니다.
+
+검사: `node --test test/demo-approval.test.mjs test/demo-device-client.test.mjs`.
+
+
 ## 승인 연결 회귀 수정 (2026-10-14)
 
 `c432f6dedd6e`에서 없는 `createSignedHeaders`를 가져와 로그인 화면의 모듈 시작이 실패하는 오류를 고쳤습니다. 공식 엔진 계약 없이 자체 공개키를 등록하고 프로세스 메모리 Map을 승인 기록으로 사용하는 서버 경로도 제거했습니다. `api/device-approval.js`에 잘못 들어간 브라우저 코드를 서버 진입점으로 바꿨습니다. 기기 승인 API는 연결 미준비를 명확히 반환하며, 보호 자료 API는 검증된 기기 연결이 없으면 기존 자료 처리 함수를 호출하지 않습니다.
