@@ -1,6 +1,14 @@
-# 현재 구현: 8단계 — 자료마다 갈 수 있는 구역을 나눕니다
+# 현재 구현: 9단계 — 도플갱어를 찾고 권한을 거둡니다
 
-기존 메모·UUID·본문·주소와 화면 메뉴를 보존하고, 개인 메모와 강사 공지의 자원 ID 및 서버 권한 검사를 추가했습니다. 8단계 저장점은 2acc339, API 경로 수정은 88c45dc입니다. 이후 아래 판정기 정상 요청 복구는 작업 중 변경이며 아직 커밋·푸시·배포하지 않았습니다. 설정의 단계는 8입니다.
+9단계 저장점은 로컬 가상 사건 입력·복합 탐지·별도 회수 제안입니다. 동일 가명 사용자와 확인된 기기 한 개의 10분 내 GET이 120건을 넘고 해당 구간에 낯선 네트워크 사건이 있을 때만 `propose_revocation`, `burst_read`, 가명 주체, 기기 ID를 반환합니다. 정상·지역 단독·조회량 단독·기기 확인 누락은 `observe`입니다. 다른 사용자와 기기의 조회는 합산하지 않습니다. 메모 내용·토큰·실명·실제 IP는 읽거나 기록하지 않습니다.
+
+제공 v1 사건에는 네트워크·기기가 없어 [로컬 확장 계약](docs/DETECT_EVENTS.md)을 명시했습니다. 원본 v1 대량 조회 단독 시험과 기대값이 다릅니다. 실제 엔진의 확장 사건 전달, 권한 회수, 재접속 차단 및 걸린 시간은 **미확인/미실행**입니다. 회수 API를 만들거나 권한을 변경하지 않았습니다. 기존 `decide()` 응답 형식과 1~8단계 기능은 유지합니다. 실제 심판은 별도로 확인해야 합니다.
+
+직접 확인: `npm run detect:test`에서 가상 사건 12건이 모두 통과하며, `node --test test/detect-input.test.mjs test/detect-rule.test.mjs`의 6건이 통과합니다. 2026-10-14 실행으로 확인했습니다. 화면 조작은 없습니다. `npm run bundle`은 최신 커밋의 제출 JSON과 실제 HTTP 자기 점검을 생성합니다. 9단계 푸시·배포 전에는 운영 단계가 8이므로 배포 단계 비교가 실패할 수 있으며 이를 통과로 기록하지 않습니다.
+
+## 보존한 8단계 구현
+
+기존 메모·UUID·본문·주소와 화면 메뉴를 보존하고, 개인 메모와 강사 공지의 자원 ID 및 서버 권한 검사를 추가했습니다. 8단계 저장점은 2acc339, API 경로 수정은 88c45dc, 정상 요청 복구는 de1af52, 경로 등록 형식 수정은 adc1f01, 판정기 목록 거부는 4d80213입니다. 9단계 시작 시 로컬·GitHub 모두 4d80213이었고 미커밋 변경은 없었습니다. 아래 8단계 기능은 보존하며 현재 설정 단계는 9입니다.
 
 개인 메모는 `personal_note:<UUID>`, 서버에서 지정한 공지는 `instructor_notice:<UUID>`로 표시합니다. 기존 `/api/notes/:id` 주소도 유지합니다. 서버 저장 공지 목록·강사 목록과 엔진 주체 매핑은 Vercel 환경변수 `VAULT_RESOURCE_POLICY`에서 관리합니다. 기본값은 공지·강사·엔진 매핑이 없는 상태입니다. 기존 메모를 자동으로 공지로 지정하지 않습니다.
 
@@ -8,7 +16,7 @@ API는 본인 메모만 목록·조회·변경하고, 공지는 로그인 사용
 
 정상 요청 복구: 제공 시작 틀의 `/notes/demo`를 UUID 전용 검사로 거부하면서 연습 요청도 다른 UUID로 바꾸고, 시험에서만 모의 판정기를 사용했던 불일치를 고쳤습니다. `src/engine-resource-grants.mjs`에 공개 가상 자료 `personal_note:demo`의 반·프로젝트·주체·기기 및 GET/PUT 권한을 명시했습니다. 이 권한은 signals.source와 무관하며 등록 기기·추가 확인 검사를 통과해야 합니다. 실제 UUID 메모·강사 권한으로 확장되지 않습니다. DB 패키지는 실제 UUID 자원 조회에만 로딩합니다.
 
-검사 명령: `node --test test/decider-entry.test.mjs test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs test/auth-handler.test.mjs`. 로컬 검사 24건, `npm run decider:test` 9건 및 `npm run fixture:7`이 통과했습니다. 두 npm 명령은 이제 실제 제출 함수 `decide()`를 호출하며 원본 가상 요청 주소를 사용합니다. 모의 DB/강사 검사는 별도 단위 시험에만 있습니다. 실제 심판 재제출은 아직 실행하지 않았습니다.
+검사 명령: `node --test test/decider-entry.test.mjs test/resource-scope.test.mjs test/decider-input.test.mjs test/decider-step-up.test.mjs test/auth-handler.test.mjs`. 8단계 수정 당시 로컬 검사 24건, `npm run decider:test` 9건 및 `npm run fixture:7`이 통과했습니다. 두 npm 명령은 실제 제출 함수 `decide()`를 호출하며 원본 가상 요청 주소를 사용합니다. 모의 DB/강사 검사는 별도 단위 시험에만 있습니다. 사용자가 보고한 최신 8단계 공식 심판 결과는 `UNV_AMBIGUOUS`로 미확인입니다.
 
 ## 보존한 7단계 저장점
 
