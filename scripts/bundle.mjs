@@ -37,9 +37,11 @@ try {
     fail('GitHub HTTPS 저장소 주소를 origin으로 등록해 주세요.');
   }
   // A merge savepoint describes changes against the branch it was merged into.
-  const firstParent = git('rev-list', '--parents', '-n', '1', commit).split(/\s+/u)[1];
+  let firstParent;
+  try { firstParent = git('rev-parse', '--verify', `${commit}^1`); }
+  catch { firstParent = null; } // The initial commit has no parent.
   const changedFiles = (firstParent
-    ? git('diff', '--name-only', '--no-renames', firstParent, commit)
+    ? git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', firstParent, commit)
     : git('diff-tree', '--root', '--no-commit-id', '--name-only', '--no-renames', '-r', commit))
     .split(/\r?\n/u).filter(Boolean).sort();
   if (!changedFiles.length) fail('마지막 커밋에 바뀐 파일이 없습니다.');
