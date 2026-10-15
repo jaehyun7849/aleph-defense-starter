@@ -39,15 +39,10 @@ async function runProtectionChecks(config) {
     throw new Error('설정의 실제 Vercel 운영 주소를 확인하세요.');
   }
   const attempts = [];
-  async function check(attackId, path, expected, accepts, authorization, method = 'GET') {
-    // The submission sandbox allows only public HTTPS GET/HEAD requests.
-    if (method === 'POST') {
-      attempts.push({ attackId, expected, observed: 'not_run' });
-      return;
-    }
+  async function check(attackId, path, expected, accepts, authorization) {
     try {
       const response = await fetch(new URL(path, app), {
-        method, redirect: 'error',
+        method: 'GET', redirect: 'error',
         signal: AbortSignal.timeout(10000),
         headers: authorization ? { Authorization: authorization } : {},
       });
@@ -71,10 +66,8 @@ async function runProtectionChecks(config) {
   await check('anonymous_note_item', '/api/notes/00000000-0000-4000-8000-000000000001',
     '무로그인 개별 메모 요청은 401 또는 403 JSON 오류로 거부', denied);
   if (config.step >= 10) {
-    await check('anonymous_note_restore', '/api/restore-note',
-      '무로그인 복구 POST는 401 JSON 오류로 거부',
-      (response, data) => response.status === 401 && data?.reasonCode === 'login_required',
-      undefined, 'POST');
+    attempts.push({ attackId: 'anonymous_note_restore',
+      expected: '무로그인 복구 POST는 401 JSON 오류로 거부', observed: 'not_run' });
   }
   if (config.step >= 11) {
     await check('webapp_manifest', '/manifest.webmanifest',
@@ -82,12 +75,12 @@ async function runProtectionChecks(config) {
       (response, data) => response.ok && data?.name === 'BYTE BACK 내 자료실'
         && data.start_url === '/' && data.display === 'standalone'
         && Array.isArray(data.icons) && ['192x192', '512x512'].every(size => data.icons.some(icon => icon.sizes === size)));
-    for (const method of ['GET', 'POST']) {
-      await check('anonymous_device_' + method.toLowerCase(), '/api/device-approval',
-        '무로그인 기기 승인 요청/조회는 401 JSON 오류이고 등록 상태가 false',
-        (response, data) => response.status === 401 && data?.reasonCode === 'login_required'
-          && data.deviceRegistered === false, undefined, method);
-    }
+    await check('anonymous_device_get', '/api/device-approval',
+      '무로그인 기기 승인 요청/조회는 401 JSON 오류이고 등록 상태가 false',
+      (response, data) => response.status === 401 && data?.reasonCode === 'login_required'
+        && data.deviceRegistered === false);
+    attempts.push({ attackId: 'anonymous_device_post',
+      expected: '무로그인 기기 승인 요청/조회는 401 JSON 오류이고 등록 상태가 false', observed: 'not_run' });
   }
   if (config.step >= 12) {
     await check('anonymous_operations_summary', '/api/operations-summary',
