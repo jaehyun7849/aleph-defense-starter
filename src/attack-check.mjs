@@ -40,6 +40,11 @@ async function runProtectionChecks(config) {
   }
   const attempts = [];
   async function check(attackId, path, expected, accepts, authorization, method = 'GET') {
+    // The submission sandbox allows only public HTTPS GET/HEAD requests.
+    if (method === 'POST') {
+      attempts.push({ attackId, expected, observed: 'not_run' });
+      return;
+    }
     try {
       const response = await fetch(new URL(path, app), {
         method, redirect: 'error',
