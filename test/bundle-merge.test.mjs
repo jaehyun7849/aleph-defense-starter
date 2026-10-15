@@ -23,12 +23,15 @@ test('bundle records root, ordinary and merge changes, but rejects a genuinely e
     put('package.json', '{"type":"module"}');
     put('.gitignore', 'artifacts/\nbundle-notes.json\n');
     put('aleph.config.json', JSON.stringify({ step: 1, repoUrl: 'https://github.com/example/fixture' }));
-    put('src/decider.mjs', 'export const RULE_IDS = ["fixture_rule"];');
+    // Listing rules must not import or execute the production decision engine.
+    put('src/decider.mjs', 'import "fixture-package-not-installed";\nexport const RULE_IDS = ["fixture_rule"];');
     // Isolated serialization fixture; no operational HTTP result is claimed.
     put('src/attack-check.mjs', 'export async function runAttackChecks(){return [{attackId:"fixture",expected:"fixture only",observed:"not a live check"}]}');
     put('bundle-notes.json', JSON.stringify({ explanation: 'Isolated bundle serialization fixture only.' }));
     commit('root');
-    assert.equal(run().status, 0);
+    const initial = run();
+    assert.equal(initial.status, 0, initial.stderr);
+    assert.deepEqual(result().policyRules, ['fixture_rule']);
     assert.ok(result().changedFiles.includes('scripts/bundle.mjs'));
     put('README.md', 'base\n');
     commit('ordinary');
@@ -50,6 +53,15 @@ test('bundle records root, ordinary and merge changes, but rejects a genuinely e
     const empty = run();
     assert.equal(empty.status, 1);
     assert.match(empty.stderr, /마지막 커밋에 바뀐 파일이 없습니다/);
+    put('src/decider.mjs', 'throw new Error("policy_must_not_run");\nexport const RULE_IDS = Object.freeze([\'fixture_rule\',]);');
+    commit('frozen inventory');
+    assert.equal(run().status, 0);
+    assert.deepEqual(result().policyRules, ['fixture_rule']);
+    put('src/decider.mjs', 'export const RULE_IDS = [computeRule()];');
+    commit('unsupported inventory expression');
+    const expression = run();
+    assert.equal(expression.status, 1);
+    assert.match(expression.stderr, /실행식 없이 규칙 이름 문자열만/);
   } finally {
     assert.equal(dirname(resolve(root)), resolve(tmpdir()));
     assert.ok(root.startsWith(join(tmpdir(), 'aleph-bundle-merge-')));

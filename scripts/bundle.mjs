@@ -61,10 +61,17 @@ try {
   if (config.step >= 3 && (!Array.isArray(config.allowedRoutes) || !config.allowedRoutes.length)) {
     fail('3단계부터 aleph.config.json의 allowedRoutes에 자료 API 경로가 필요합니다. 3단계 제작 3을 다시 확인해 주세요.');
   }
-  const deciderUrl = pathToFileURL(join(root, 'src', 'decider.mjs'));
-  const { RULE_IDS } = await import(deciderUrl.href);
-  if (!Array.isArray(RULE_IDS)) fail('src/decider.mjs의 RULE_IDS는 규칙 이름 배열이어야 합니다.');
-  const policyRules = [...RULE_IDS];
+  // Inventory only: do not execute the policy or load its runtime dependencies.
+  const deciderSource = git('show', 'HEAD:src/decider.mjs');
+  const declarations = [...deciderSource.matchAll(/^export[ \t]+const[ \t]+RULE_IDS[ \t]*=[ \t]*(Object\.freeze[ \t]*\([ \t]*)?(\[[^\r\n]*\])[ \t]*(\))?[ \t]*;[ \t]*\r?$/gm)];
+  if (declarations.length !== 1 || Boolean(declarations[0][1]) !== Boolean(declarations[0][3])) {
+    fail('RULE_IDS는 한 줄의 문자열 배열 상수 또는 Object.freeze 배열이어야 합니다. 판정기는 실행하지 않습니다.');
+  }
+  const literal = declarations[0][2];
+  if (!/^\[\s*(?:(?:'[a-z][a-z0-9_.-]{0,79}'|"[a-z][a-z0-9_.-]{0,79}")(?:\s*,\s*(?:'[a-z][a-z0-9_.-]{0,79}'|"[a-z][a-z0-9_.-]{0,79}"))*\s*,?)?\s*\]$/iu.test(literal)) {
+    fail('RULE_IDS에 실행식 없이 규칙 이름 문자열만 적어 주세요.');
+  }
+  const policyRules = JSON.parse(literal.replace(/'/gu, '"').replace(/,\s*\]$/u, ']'));
   if (policyRules.length > 80 || policyRules.some(item => typeof item !== 'string'
       || !/^[a-z][a-z0-9_.-]{0,79}$/iu.test(item)) || new Set(policyRules).size !== policyRules.length) {
     fail('src/decider.mjs의 RULE_IDS 이름과 중복을 확인해 주세요.');
