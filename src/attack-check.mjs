@@ -15,7 +15,7 @@ export async function runAttackChecks(config) {
   }
   if (typeof config.sampleMarker !== 'string' || !config.sampleMarker) throw new Error('가상 메모의 확인 표시를 넣어 주세요.');
   const response = await fetch(new URL('/data.json', app), {
-    redirect: 'error', signal: AbortSignal.timeout(10000),
+    method: 'GET', redirect: 'error',
   });
   let visible = false;
   if (response.ok) {
@@ -43,7 +43,6 @@ async function runProtectionChecks(config) {
     try {
       const response = await fetch(new URL(path, app), {
         method: 'GET', redirect: 'error',
-        signal: AbortSignal.timeout(10000),
         headers: authorization ? { Authorization: authorization } : {},
       });
       let data = null;
@@ -110,7 +109,7 @@ async function runProtectionChecks(config) {
   if (config.step >= 5) {
     for (const path of ['/', '/owner-check.html', '/auth-client.js']) {
       try {
-        const response = await fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
+        const response = await fetch(new URL(path, app), { method: 'GET', redirect: 'error' });
         const text = await response.text();
         const success = response.ok && !/sb_(?:publishable|secret)_|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(text);
         attempts.push({ attackId: 'browser_key_' + (path === '/' ? 'home' : path.slice(1).replace(/[^a-z0-9]/g, '_')),
@@ -140,7 +139,7 @@ async function checkAnonymousDatabase(config) {
         || original.search || original.hash || original.username || original.password) throw new Error('invalid_original_api');
     original.search = '?select=id&limit=1';
     const response = await fetch(original, {
-      redirect: 'error', signal: AbortSignal.timeout(10000),
+      method: 'GET', redirect: 'error',
       headers: { apikey: 'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC' },
     });
     let data = null;

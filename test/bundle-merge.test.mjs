@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-test('bundle records root, ordinary and merge changes, but rejects a genuinely empty commit', () => {
+test('starter bundle records root and ordinary changes, and rejects merge and empty savepoints', () => {
   const root = mkdtempSync(join(tmpdir(), 'aleph-bundle-merge-'));
   const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', windowsHide: true }).trim();
   const put = (path, value) => writeFileSync(join(root, path), value);
@@ -46,9 +46,8 @@ test('bundle records root, ordinary and merge changes, but rejects a genuinely e
     commit('primary');
     git('merge', '--no-ff', 'feature', '-m', 'merge');
     const merged = run();
-    assert.equal(merged.status, 0, merged.stderr);
-    assert.equal(result().commit, git('rev-parse', 'HEAD'));
-    assert.deepEqual(result().changedFiles, ['README.md']);
+    assert.equal(merged.status, 1);
+    assert.match(merged.stderr, /마지막 커밋에 바뀐 파일이 없습니다/);
     git('commit', '--allow-empty', '-m', 'empty');
     const empty = run();
     assert.equal(empty.status, 1);

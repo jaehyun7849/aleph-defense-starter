@@ -3,8 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const git = (...args) => execFileSync('git', args, {
-  cwd: root,
+const git = (...args) => execFileSync('git', ['-C', root, ...args], {
   encoding: 'utf8', timeout: 5000, maxBuffer: 512 * 1024, windowsHide: true,
   env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
 }).trim();
@@ -36,13 +35,7 @@ try {
     if (error.message?.startsWith('origin 주소가') || error.message?.startsWith('GitHub HTTPS')) throw error;
     fail('GitHub HTTPS 저장소 주소를 origin으로 등록해 주세요.');
   }
-  // A merge savepoint describes changes against the branch it was merged into.
-  let firstParent;
-  try { firstParent = git('rev-parse', '--verify', `${commit}^1`); }
-  catch { firstParent = null; } // The initial commit has no parent.
-  const changedFiles = (firstParent
-    ? git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', firstParent, commit)
-    : git('diff-tree', '--root', '--no-commit-id', '--name-only', '--no-renames', '-r', commit))
+  const changedFiles = git('diff-tree', '--root', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
     .split(/\r?\n/u).filter(Boolean).sort();
   if (!changedFiles.length) fail('마지막 커밋에 바뀐 파일이 없습니다.');
   const config = fromCommit('aleph.config.json');
