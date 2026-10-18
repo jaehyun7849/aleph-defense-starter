@@ -10,6 +10,24 @@ const git = (...args) => execFileSync('git', args, {
   env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
 }).trim();
 const fromCommit = (path) => JSON.parse(git('show', `HEAD:${path}`));
+// Read origin from the repository's own config file with node:fs only; no extra git command.
+const readOriginUrl = () => {
+  const text = readFileSync(join(root, '.git', 'config'), 'utf8');
+  let inOrigin = false;
+  let url = null;
+  for (const raw of text.split(/\r?\n/u)) {
+    const line = raw.trim();
+    const section = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\]$/u.exec(line);
+    if (section) {
+      inOrigin = section[1].toLowerCase() === 'remote' && section[2] === 'origin';
+      continue;
+    }
+    if (!inOrigin) continue;
+    const entry = /^url\s*=\s*(.*)$/iu.exec(line);
+    if (entry) url = entry[1].trim().replace(/^"(.*)"$/u, '$1');
+  }
+  return url;
+};
 const fail = (message) => { throw new Error(message); };
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/-]{16,}|\bsb_secret_[A-Za-z0-9_-]{12,}|\bsk-[A-Za-z0-9_-]{20,}|\beyJ[A-Za-z0-9_-]{12,}\.eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu;
 const repository = /^https:\/\/github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)\/([A-Za-z0-9._-]{1,100})\/?$/iu;
@@ -29,8 +47,8 @@ try {
   const commit = git('rev-parse', '--verify', 'HEAD');
   let repoUrl;
   try {
-    // Read origin only; do not invoke the multi-purpose `git remote` command.
-    repoUrl = normalizedRepo(git('config', '--get', 'remote.origin.url'));
+    // Read origin from .git/config with node:fs; no `git config` or `git remote` call.
+    repoUrl = normalizedRepo(readOriginUrl());
   } catch (error) {
     if (error.message?.startsWith('GitHub HTTPS')) throw error;
     fail('GitHub HTTPS 저장소 주소를 origin으로 등록해 주세요.');
