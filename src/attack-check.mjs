@@ -39,11 +39,10 @@ async function runProtectionChecks(config) {
     throw new Error('설정의 실제 Vercel 운영 주소를 확인하세요.');
   }
   const attempts = [];
-  async function check(attackId, path, expected, accepts, authorization) {
+  async function check(attackId, path, expected, accepts) {
     try {
       const response = await fetch(new URL(path, app), {
         method: 'GET', redirect: 'error',
-        headers: authorization ? { Authorization: authorization } : {},
       });
       let data = null;
       if (/^application\/(?:json|[a-z0-9.+-]+\+json)(?:;|$)/i.test(response.headers.get('content-type') ?? '')) {
@@ -86,8 +85,10 @@ async function runProtectionChecks(config) {
       '무로그인 작전실 요약은 401이며 가린 기록도 반환하지 않음',
       (response, data) => response.status === 401 && data?.reasonCode === 'login_required' && !('evidence' in data));
   }
-  await check('invalid_login_token', '/api/notes',
-    '유효하지 않은 로그인 토큰은 JSON 오류로 거부', denied, 'Bearer invalid');
+  // The isolated runner allows only plain public HTTPS GET/HEAD requests, so a
+  // request that must carry an Authorization header is not sent.
+  attempts.push({ attackId: 'invalid_login_token',
+    expected: '유효하지 않은 로그인 토큰은 JSON 오류로 거부', observed: 'not_run' });
   await check('static_notes_removed', '/data.json',
     '공개 JSON은 404 또는 메모 0건이고 확인 표시가 없음',
     (response, data) => response.status === 404
@@ -104,7 +105,10 @@ async function runProtectionChecks(config) {
       && (response.headers.get('x-content-type-options') === 'nosniff'
         || Boolean(response.headers.get('content-security-policy'))));
   if (config.step >= 4) {
-    attempts.push(await checkAnonymousDatabase(config));
+    // The database host is a different origin than the deployed app and the
+    // read needs an apikey header, so this check is not sent from the runner.
+    attempts.push({ attackId: 'anonymous_database_read',
+      expected: '공개용 키만 사용한 DB 직접 읽기는 권한 오류로 거부', observed: 'not_run' });
   }
   if (config.step >= 5) {
     for (const path of ['/', '/owner-check.html', '/auth-client.js']) {
@@ -122,33 +126,4 @@ async function runProtectionChecks(config) {
     }
   }
   return attempts;
-}
-
-async function checkAnonymousDatabase(config) {
-  const expected = '공개용 키만 사용한 DB 직접 읽기는 권한 오류로 거부';
-  try {
-    const issuer = new URL(config.identityProvider.issuer);
-    if (issuer.protocol !== 'https:' || issuer.username || issuer.password
-        || issuer.port || issuer.search || issuer.hash
-        || issuer.pathname !== '/auth/v1'
-        || !/^[a-z0-9-]+\.supabase\.co$/.test(issuer.hostname)) {
-      throw new Error('invalid_database_origin');
-    }
-    const original = config.step >= 5 ? new URL(config.originalApiUrl) : new URL('/rest/v1/notes', issuer.origin);
-    if (original.origin !== issuer.origin || original.pathname !== '/rest/v1/notes'
-        || original.search || original.hash || original.username || original.password) throw new Error('invalid_original_api');
-    original.search = '?select=id&limit=1';
-    const response = await fetch(original, {
-      method: 'GET', redirect: 'error',
-      headers: { apikey: 'sb_publishable_KCBRXcZaX0rKlgxb6wVvZg_ad5fzavC' },
-    });
-    let data = null;
-    try { data = await response.json(); } catch {}
-    const success = [401, 403].includes(response.status) && data?.code === '42501';
-    return { attackId: 'anonymous_database_read', expected,
-      observed: `HTTP ${response.status}; 권한 거부 확인 ${success ? '통과' : '실패'}` };
-  } catch {
-    return { attackId: 'anonymous_database_read', expected,
-      observed: '요청 실패; DB 직접 읽기 거부를 확인하지 못함' };
-  }
 }
