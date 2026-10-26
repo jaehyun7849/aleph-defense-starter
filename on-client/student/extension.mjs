@@ -513,10 +513,51 @@ export function createStudentView() {
         add('p', '기존 접속·보안 기록은 그대로 유지됩니다.');
         return root;
       }
+      const result = explanation.data;
+      const evidence = new Map((Array.isArray(event.evidence) ? event.evidence : []).map(item => [item.id, item.text]));
+      const referencesMatch = refs => Array.isArray(refs) && refs.length > 0
+        && refs.every(ref => evidence.has(ref));
+      if (!referencesMatch(result.evidenceIds) || !Array.isArray(result.proposals)
+          || result.requiresHumanConfirmation !== true || result.executed !== false
+          || result.proposals.some(proposal => !referencesMatch(proposal.evidenceIds)
+            || !Array.isArray(event.supportedActions) || !event.supportedActions.includes(proposal.action))) {
+        add('p', 'AI 사건 설명 결과: 확인 불가');
+        add('p', '현재 사건의 근거 또는 제안의 확인 조건이 일치하지 않습니다. 기존 접속·보안 기록은 그대로 유지됩니다.');
+        return root;
+      }
       root.setAttribute('data-student-explanation-event', eventId);
       add('p', `사건 ID: ${eventId}`);
       add('p', safeText(explanation.data.summary));
       if (typeof checkedAt === 'string' && checkedAt.length > 0) add('p', `설명 확인 시각: ${safeText(checkedAt)}`);
+      add('p', 'AI 요약은 참고용 해석입니다. 현재 사건의 근거·규칙·상태와 함께 확인하세요.');
+      add('h4', '인용한 근거');
+      for (const ref of result.evidenceIds) add('p', `${safeText(ref)} — ${safeText(evidence.get(ref))}`);
+      add('h4', '현재 사건의 규칙');
+      if (!Array.isArray(event.rules) || event.rules.length === 0) add('p', '제공된 규칙이 없습니다.');
+      else for (const rule of event.rules) add('p', `${safeText(rule.id)} — ${safeText(rule.text)}`);
+      add('h4', '현재 사건의 상태');
+      const stateLabels = {
+        access: { allowed: '접근 허용', denied: '접근 거부', unknown: '확인 불가' },
+        session: { active: '활성', expired: '만료', revoked: '철회됨', unknown: '확인 불가' },
+        device: { compliant: '보안 기준 충족', noncompliant: '보안 기준 미충족', unknown: '확인 불가' },
+      };
+      for (const [key, name] of [['access', '접속'], ['session', '세션'], ['device', '기기']]) {
+        const raw = event.state?.[key];
+        const value = Object.hasOwn(stateLabels[key], raw) ? raw : 'unknown';
+        add('p', `${name}: ${stateLabels[key][value]}(${value})`);
+      }
+      add('h4', '조치 제안');
+      if (result.proposals.length === 0) {
+        add('p', Array.isArray(event.supportedActions) && event.supportedActions.length === 0
+          ? '원천에서 지원하는 조치가 없어 조치 제안이 없습니다.'
+          : 'AI가 이 기록에 대한 조치를 제안하지 않았습니다. 근거를 확인하고 필요하면 담당자와 판단하세요.');
+      } else {
+        for (const proposal of result.proposals) {
+          add('p', `조치: ${safeText(proposal.action)} · 이유: ${safeText(proposal.reason)}`);
+          add('p', `제안 근거 ID: ${proposal.evidenceIds.map(safeText).join(', ')}`);
+        }
+      }
+      add('p', '제안은 아직 실행되지 않았습니다. 실행 전 별도의 사람 확인이 필요합니다. 이 학생 표시 영역은 조치를 실행하지 않습니다.');
       return root;
     },
     renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
