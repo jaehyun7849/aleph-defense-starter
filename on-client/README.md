@@ -25,3 +25,9 @@ npm start도 같은 서버를 켭니다. 기본 실행은 실제 회사 시스�
 - 오류 코드별 해결: docs/CONNECTION_TROUBLESHOOT.md
 - 시작 틀 업데이트(내 파일 보존): docs/STARTER_UPDATE.md
 - 실제 회사 시스템(SDP)·앱 안 AI 연결은 담당자가 따로 안내할 때만 씁니다: docs/SDP_HOST_CONNECTION.md, docs/AI_SETUP_GUIDE.md. 이 연결은 앱을 처음 켜고 13~16단계 화면을 만들거나 공식 AI 코드 판정을 받기 위한 전제 조건은 아닙니다. 다만 17단계 이후의 실제 연결과 새 환경 재현은 해당 단계의 기준에 따라 따로 확인합니다.
+
+## 학생 작성: 케셰브 실행 설명서 (21단계)
+
+케셰브의 학생 화면은 본인 계정·기기·세션, 업무 앱 접근 판정, 보안 기록, AI 연결·설명, 조치 요청 상태와 OSV 조회 결과를 구분해 표시합니다. 학생 표시는 `student/extension.mjs`, 제공 화면·서버·연동은 `public/`·`src/`에 있습니다. Windows PowerShell에서 실행하며, package.json의 기준 Node.js는 24.19.0입니다. 2026-10-26에는 Node.js 24.22.1과 Windows PowerShell 5.1에서 실행 도구 및 로컬 HTTP 응답만 확인했습니다. 실제 계정·AI·조치 연결 완료를 뜻하지 않습니다.
+
+실제 작업 위치, 실행·종료 방법, 글로 쓴 구성도, 오류 확인 순서와 미확인 항목은 [학생 실행 설명서](docs/STUDENT_RUNBOOK.md)에 있습니다. 위 제공 문서는 보존했으며, 현재 파일과 다른 안내가 있는 경우 학생 설명서의 대조 표를 함께 확인합니다.
