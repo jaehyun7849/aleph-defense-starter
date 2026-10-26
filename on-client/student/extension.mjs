@@ -560,6 +560,78 @@ export function createStudentView() {
       add('p', '제안은 아직 실행되지 않았습니다. 실행 전 별도의 사람 확인이 필요합니다. 이 학생 표시 영역은 조치를 실행하지 않습니다.');
       return root;
     },
-    renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
+    renderAction({ status = 'idle', event, actionId, target, receipt, observation, message, confirmationExpiresAt, error } = {}) {
+      const root = document.createElement('div');
+      const add = (tag, text) => {
+        const node = document.createElement(tag);
+        node.textContent = text;
+        root.appendChild(node);
+      };
+      const safeText = value => {
+        if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return '확인 불가';
+        const text = String(value);
+        const secret = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+\S+|\bsb_secret_[A-Za-z0-9_-]+|\bsk-[A-Za-z0-9_-]{12,}|\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|(?:password|api[_-]?key|token|secret)\s*[:=]\s*\S+/i;
+        return secret.test(text) ? '민감정보 제외' : text || '확인 불가';
+      };
+      const show = (label, value) => {
+        if (value !== undefined && value !== null && value !== '') add('p', `${label}: ${safeText(value)}`);
+      };
+      const states = {
+        idle: '아직 미실행(idle)',
+        loading: '조치 준비 또는 결과 조회 중(loading). 실행 효과는 아직 확인되지 않았습니다.',
+        prepared: '준비됨·미실행(prepared). 실제 대상과 조치를 확인한 뒤 별도의 사람 확인이 필요합니다.',
+        executing: '서버에 전달 중(executing). 결과가 아직 확인되지 않았습니다.',
+        pending: '서버 접수·처리 중(pending). 접수 응답(ACK)은 효과 확인이 아닙니다. 결과가 아직 확인되지 않았습니다.',
+        succeeded: '효과 확인(succeeded)',
+        denied: '거절(denied)',
+        failed: '실패(failed)',
+        unknown: '결과 불명(unknown). 성공 또는 효과 없음으로 판단할 수 없습니다. 제공 화면의 연동 시스템 결과만 재조회 버튼으로 결과만 다시 확인하세요.',
+        expired: '확인 기한 지남(expired). 제공 화면에서 조치를 다시 준비하고 대상과 조치를 확인하세요.',
+        error: '요청 처리 안 됨(error)',
+      };
+      const mismatched = (receipt?.eventId != null && event?.id != null && receipt.eventId !== event.id)
+        || (receipt?.actionId != null && actionId != null && receipt.actionId !== actionId);
+      const currentStatus = Object.hasOwn(states, status) && !mismatched
+        && (status !== 'succeeded' || observation?.effectApplied === true) ? status : 'unknown';
+      add('h3', '보안 조치 요청 상태');
+      add('p', states[currentStatus]);
+      if (mismatched) add('p', '접수증의 사건 또는 조치가 현재 선택과 일치하지 않아 결과를 확인할 수 없습니다.');
+      if (status === 'succeeded' && currentStatus === 'unknown') add('p', '수신 상태는 succeeded이지만 현재 요청의 효과 적용을 확인하지 못했습니다.');
+      if (event?.id != null) {
+        show('사건 ID', event.id);
+        if (!mismatched && safeText(event.id) === event.id) root.setAttribute('data-student-action-event', event.id);
+      }
+      if (Array.isArray(event?.evidence)) {
+        for (const evidence of event.evidence) show('근거 ID', evidence.id);
+      }
+      show('조치 ID', actionId);
+      show('실제 대상 ID', target?.id);
+      show('대상 세대(generation)', target?.generation);
+      show('요청 ID(requestId)', receipt?.requestId);
+      show('접수증 ID(receiptId)', receipt?.receiptId);
+      show('접수증 버전(version)', receipt?.version);
+      show('접수증 상태', receipt?.status);
+      show('중복 요청 재사용(replayed)', receipt?.replayed);
+      if (!mismatched && event?.id != null && typeof receipt?.requestId === 'string'
+          && receipt.requestId.length > 0 && safeText(receipt.requestId) === receipt.requestId) {
+        root.setAttribute('data-student-action-request', receipt.requestId);
+      }
+      show('확인 기한', confirmationExpiresAt);
+      if (currentStatus === 'succeeded') {
+        add('p', 'effectApplied: true');
+        add('p', `관측 시각: ${safeText(observation.observedAt)}`);
+      }
+      show('서버 안내', message);
+      if (error) {
+        show('오류 코드', error.code);
+        show('오류 안내', error.message);
+      }
+      if (Array.isArray(event?.supportedActions) && event.supportedActions.length === 0) {
+        add('p', '이 기록에는 연동 시스템이 지원하는 조치가 없어 조치 준비 버튼이 표시되지 않는 것이 정상입니다.');
+      }
+      add('p', 'AI 제안은 실행이 아닙니다. 준비 후 별도의 사람 확인을 거쳐야 서버에 전달됩니다. 이 학생 칸은 상태만 표시하며 요청이나 자동 재전송을 수행하지 않습니다.');
+      add('p', '결과 조회와 취소는 제공 화면의 버튼을 사용하세요. 조치 화면 취소는 이미 서버에 전달된 조치 효과를 되돌리지 않습니다.');
+      return root;
+    },
   };
 }
